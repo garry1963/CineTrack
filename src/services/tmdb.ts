@@ -38,7 +38,8 @@ export async function fetchFromTMDB<T = any>(
     }
   }
 
-  const customKey = typeof window !== 'undefined' ? localStorage.getItem('cine_tmdb_api_key') : null;
+  const envKey = (import.meta as any).env?.VITE_TMDB_API_KEY;
+  const customKey = typeof window !== 'undefined' ? (localStorage.getItem('cine_tmdb_api_key') || (envKey && envKey !== 'YOUR_TMDB_API_KEY' ? envKey : null)) : null;
   const headers: Record<string, string> = {};
   if (customKey) {
     headers['x-tmdb-key'] = customKey;
