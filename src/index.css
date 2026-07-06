@@ -1,0 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-border-custom: var(--border);
+  --color-primary-custom: var(--primary);
+  --color-muted-custom: var(--muted);
+  --color-accent-custom: var(--accent);
+}
+
+:root, .theme-dark {
+  --background: #050505;
+  --foreground: #f0f0f0;
+  --card: #121212;
+  --border: #1f1f1f;
+  --primary: #f97316;
+  --muted: #a0a0a0;
+  --accent: #dc2626;
+}
+
+.theme-light {
+  --background: #fafafa;
+  --foreground: #0d0d0d;
+  --card: #ffffff;
+  --border: #e5e5e5;
+  --primary: #f97316;
+  --muted: #737373;
+  --accent: #ea580c;
+}
+
+.theme-amoled {
+  --background: #000000;
+  --foreground: #f5f5f5;
+  --card: #0a0a0a;
+  --border: #141414;
+  --primary: #f97316;
+  --muted: #a3a3a3;
+  --accent: #ea580c;
+}
+
+.theme-dynamic {
+  --background: #050505;
+  --foreground: #f0f0f0;
+  --card: #121212;
+  --border: #1f1f1f;
+  --primary: #f97316;
+  --muted: #a0a0a0;
+  --accent: #ea580c;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Smooth visual layouts */
+.aspect-poster {
+  aspect-ratio: 2 / 3;
+}
+
+.aspect-backdrop {
+  aspect-ratio: 16 / 9;
+}

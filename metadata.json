@@ -1,0 +1,8 @@
+{
+  "name": "CineTrack",
+  "description": "A modern, feature-rich TV Show and Movie Tracker inspired by TV Time, featuring TMDB integration, progress tracking, watchlist, statistics, calendar, and Reddit discussion links.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
