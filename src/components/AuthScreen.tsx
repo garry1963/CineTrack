@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Film, Sparkles, Shield, ChevronRight, LogIn, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Film, Sparkles, Shield, ChevronRight, LogIn, AlertCircle, ExternalLink } from 'lucide-react';
 import { useCineTrack } from '../context/CineTrackContext';
 
 interface AuthScreenProps {
@@ -11,6 +11,11 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loadingGuest, setLoadingGuest] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInIframe, setIsInIframe] = useState(false);
+
+  useEffect(() => {
+    setIsInIframe(window.self !== window.top);
+  }, []);
 
   const handleGoogleSignIn = async () => {
     setLoadingGoogle(true);
@@ -21,9 +26,9 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/popup-blocked') {
-        setError('The sign-in popup was blocked by your browser. Please allow popups for this site, or click the "Open in new tab" icon at the top-right of the preview window.');
+        setError('The sign-in popup was blocked by your browser. Please allow popups, or click the "Open in New Tab" button below to authenticate.');
       } else if (err.code === 'auth/popup-closed-by-user') {
-        setError('The Google Sign-In window was closed. If you are using the embedded preview, please click the "Open in new tab" icon at the top-right of the preview window to sign in securely.');
+        setError('The Google Sign-In window was closed. If you are using the embedded preview, click the "Open in New Tab" button below to sign in successfully.');
       } else if (err.code === 'auth/cancelled-popup-request') {
         setError('The sign-in request was cancelled. Please try again.');
       } else {
@@ -114,16 +119,30 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
               )}
             </button>
             <p className="text-[10px] text-neutral-500 leading-normal max-w-xs mx-auto">
-              If popups fail inside the embedded preview, click the <strong className="text-neutral-300 font-semibold">"Open in new tab"</strong> button at the top-right of the preview window.
+              If Google Sign-In popups are blocked or closed in the iframe, use the button below to open in a full window.
             </p>
           </div>
+
+          {/* New Tab Option */}
+          {isInIframe && (
+            <a
+              href={window.location.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl bg-neutral-900/80 hover:bg-neutral-900 text-primary-custom border border-primary-custom/30 font-medium text-sm transition-all duration-200 cursor-pointer text-center"
+              id="open-new-tab-btn"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>Open App in New Tab</span>
+            </a>
+          )}
 
           {/* Local Guest Fallback Option */}
           <button
             type="button"
             onClick={handleEnterVault}
             disabled={isLoading}
-            className="w-full py-3 px-6 rounded-2xl bg-neutral-900/60 hover:bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800/60 font-medium text-sm transition-all duration-200 cursor-pointer"
+            className="w-full py-3.5 px-6 rounded-2xl bg-neutral-900/40 hover:bg-neutral-900/60 text-neutral-400 hover:text-white border border-neutral-800/40 font-medium text-sm transition-all duration-200 cursor-pointer"
             id="local-vault-btn"
           >
             {loadingGuest ? (
