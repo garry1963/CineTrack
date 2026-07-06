@@ -21,7 +21,11 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/popup-blocked') {
-        setError('The sign-in popup was blocked by your browser. Please allow popups for this site and try again.');
+        setError('The sign-in popup was blocked by your browser. Please allow popups for this site, or click the "Open in new tab" icon at the top-right of the preview window.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError('The Google Sign-In window was closed. If you are using the embedded preview, please click the "Open in new tab" icon at the top-right of the preview window to sign in securely.');
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        setError('The sign-in request was cancelled. Please try again.');
       } else {
         setError(err.message || 'Failed to sign in with Google. Please try again.');
       }
