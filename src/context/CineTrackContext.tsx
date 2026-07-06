@@ -133,7 +133,13 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         setRatings(JSON.parse(localStorage.getItem('cine_ratings') || '[]'));
         setNotes(JSON.parse(localStorage.getItem('cine_notes') || '[]'));
         setCustomLists(JSON.parse(localStorage.getItem('cine_custom_lists') || '[]'));
-        setSettings(JSON.parse(localStorage.getItem('cine_settings') || JSON.stringify(defaultSettings)));
+        const restoredSettings = JSON.parse(localStorage.getItem('cine_settings') || JSON.stringify(defaultSettings));
+        setSettings(restoredSettings);
+        if (restoredSettings.tmdbApiKey) {
+          localStorage.setItem('cine_tmdb_api_key', restoredSettings.tmdbApiKey);
+        } else {
+          localStorage.removeItem('cine_tmdb_api_key');
+        }
       } catch (e) {
         console.error('Error restoring guest local storage:', e);
       }
@@ -179,9 +185,16 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
     const unsubSettings = onSnapshot(doc(db, 'users', userId, 'settings', 'preferences'), (docSnap) => {
       if (docSnap.exists()) {
-        setSettings({ ...defaultSettings, ...docSnap.data() as AppSettings });
+        const loadedSettings = docSnap.data() as AppSettings;
+        setSettings({ ...defaultSettings, ...loadedSettings });
+        if (loadedSettings.tmdbApiKey) {
+          localStorage.setItem('cine_tmdb_api_key', loadedSettings.tmdbApiKey);
+        } else {
+          localStorage.removeItem('cine_tmdb_api_key');
+        }
       } else {
         setSettings(defaultSettings);
+        localStorage.removeItem('cine_tmdb_api_key');
       }
       setLoading(false);
     }, (err) => {
@@ -499,6 +512,15 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
+    
+    if (newSettings.tmdbApiKey !== undefined) {
+      if (newSettings.tmdbApiKey) {
+        localStorage.setItem('cine_tmdb_api_key', newSettings.tmdbApiKey);
+      } else {
+        localStorage.removeItem('cine_tmdb_api_key');
+      }
+    }
+
     if (user.uid === 'guest_user') {
       localStorage.setItem('cine_settings', JSON.stringify(updated));
       return;

@@ -96,12 +96,21 @@ function Dashboard() {
       {/* Main content scroll container */}
       <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto pb-24 md:pb-8">
         
-        {/* Missing API Key warning banner (Only visible if TMDB_API_KEY is standard placeholder) */}
-        {process.env.TMDB_API_KEY === 'YOUR_TMDB_API_KEY' && (
-          <div className="mb-6 bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3 items-center">
-            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-            <div className="text-xs leading-relaxed text-slate-300">
-              <strong className="text-amber-500 font-bold">TMDB API Key missing!</strong> Please define the <code className="bg-slate-900 px-1.5 py-0.5 rounded text-indigo-400">TMDB_API_KEY</code> environment secret inside your AI Studio Settings parameters to fully load movies, TV episodes, cast and backdrops.
+        {/* Missing API Key warning banner */}
+        {!settings.tmdbApiKey && (typeof process === 'undefined' || !process.env || process.env.TMDB_API_KEY === 'YOUR_TMDB_API_KEY') && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3.5 items-start md:items-center">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 md:mt-0" />
+            <div className="text-xs leading-relaxed text-slate-300 flex-1 md:flex md:items-center md:justify-between gap-4">
+              <div>
+                <strong className="text-amber-500 font-bold block md:inline">TMDB API Key is missing!</strong>{' '}
+                <span>Please define the <code className="bg-slate-900 px-1.5 py-0.5 rounded text-indigo-400 font-mono">TMDB_API_KEY</code> environment secret or enter a custom key in your profile settings to load movie & TV catalogs.</span>
+              </div>
+              <button
+                onClick={() => setCurrentView({ type: 'profile' })}
+                className="mt-2.5 md:mt-0 text-[11px] text-amber-400 hover:text-amber-300 font-bold uppercase tracking-wider shrink-0"
+              >
+                Go to Settings &rarr;
+              </button>
             </div>
           </div>
         )}

@@ -207,6 +207,24 @@ export default function ProfileView() {
             </select>
           </div>
 
+          {/* Custom TMDB API Key for Standalone Mode */}
+          <div className="space-y-1.5 pt-3 border-t border-border-custom/50">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-custom">Custom TMDB API Key</label>
+              <span className="text-[10px] text-amber-500 font-semibold uppercase">Standalone Mode</span>
+            </div>
+            <input
+              type="text"
+              placeholder="Paste your 32-character TMDB API Key..."
+              value={settings.tmdbApiKey || ''}
+              onChange={(e) => updateSettings({ tmdbApiKey: e.target.value.trim() })}
+              className="w-full bg-background border border-border-custom px-3.5 py-2.5 rounded-xl text-xs font-medium text-foreground outline-none font-mono focus:border-primary-custom/50 transition-colors"
+            />
+            <p className="text-[10px] text-muted-custom leading-normal">
+              Required if running CineTrack as a standalone web app or outside AI Studio. Get your key at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="text-primary-custom hover:underline font-semibold">themoviedb.org</a>.
+            </p>
+          </div>
+
         </div>
 
         {/* Sync & Vault Backups Panel */}

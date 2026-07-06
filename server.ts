@@ -33,13 +33,18 @@ app.get('/api/tmdb', async (req, res) => {
     return res.status(400).json({ error: 'Path parameter is required (e.g. ?path=/movie/popular)' });
   }
 
-  // Get TMDB Key (Fallback to a demo key or prompt the user if missing)
-  const tmdbKey = process.env.TMDB_API_KEY;
+  // Get TMDB Key (with fallback to client-supplied key if the server doesn't have one configured)
+  let tmdbKey = process.env.TMDB_API_KEY;
+  const clientKey = req.headers['x-tmdb-key'] || req.query.user_api_key;
+  if (clientKey && typeof clientKey === 'string' && clientKey !== 'YOUR_TMDB_API_KEY') {
+    tmdbKey = clientKey;
+  }
+
   if (!tmdbKey || tmdbKey === 'YOUR_TMDB_API_KEY') {
     return res.status(500).json({
       error: 'TMDB_API_KEY is not configured.',
       needsConfig: true,
-      message: 'Please configure the TMDB_API_KEY environment variable in your AI Studio secrets.'
+      message: 'Please configure the TMDB_API_KEY environment variable in your server environment, or provide your own in the App Settings page.'
     });
   }
 

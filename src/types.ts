@@ -21,6 +21,7 @@ export interface AppSettings {
   backdropQuality: 'w780' | 'w1280' | 'original';
   autoSync: boolean;
   cacheSize: string; // e.g. "50MB"
+  tmdbApiKey?: string;
 }
 
 // TMDB Standard Structures
