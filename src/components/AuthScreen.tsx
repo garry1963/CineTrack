@@ -95,23 +95,28 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
         {/* Action Portal */}
         <div className="w-full space-y-4" id="action-portal-container">
           {/* Real Firebase Backend Sign In */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isLoading}
-            className="w-full group bg-gradient-to-r from-primary-custom to-orange-600 hover:from-primary-custom/95 hover:to-orange-600/95 active:scale-[0.98] disabled:opacity-50 text-white font-medium text-sm py-3.5 px-6 rounded-2xl shadow-lg shadow-primary-custom/10 flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer"
-            id="google-signin-btn"
-          >
-            {loadingGoogle ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <LogIn className="w-4 h-4" />
-                <span>Sign in with Google</span>
-                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform ml-auto opacity-60" />
-              </>
-            )}
-          </button>
+          <div className="space-y-1.5 w-full">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+              className="w-full group bg-gradient-to-r from-primary-custom to-orange-600 hover:from-primary-custom/95 hover:to-orange-600/95 active:scale-[0.98] disabled:opacity-50 text-white font-medium text-sm py-3.5 px-6 rounded-2xl shadow-lg shadow-primary-custom/10 flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer"
+              id="google-signin-btn"
+            >
+              {loadingGoogle ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  <span>Sign in with Google</span>
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform ml-auto opacity-60" />
+                </>
+              )}
+            </button>
+            <p className="text-[10px] text-neutral-500 leading-normal max-w-xs mx-auto">
+              If popups fail inside the embedded preview, click the <strong className="text-neutral-300 font-semibold">"Open in new tab"</strong> button at the top-right of the preview window.
+            </p>
+          </div>
 
           {/* Local Guest Fallback Option */}
           <button
