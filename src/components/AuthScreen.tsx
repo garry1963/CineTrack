@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Film, Sparkles, Shield, ChevronRight, LogIn, AlertCircle, ExternalLink } from 'lucide-react';
+import { Film, Sparkles, Shield, ChevronRight, LogIn, AlertCircle, ExternalLink, Mail, Lock, UserPlus } from 'lucide-react';
 import { useCineTrack } from '../context/CineTrackContext';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../firebase';
 
 interface AuthScreenProps {
   onSuccess: () => void;
 }
 
 export default function AuthScreen({ onSuccess }: AuthScreenProps) {
-  const { loginAsGuest, loginWithGoogle } = useCineTrack();
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const { loginAsGuest } = useCineTrack();
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [loadingGuest, setLoadingGuest] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInIframe, setIsInIframe] = useState(false);
@@ -17,25 +22,48 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
     setIsInIframe(window.self !== window.top);
   }, []);
 
-  const handleGoogleSignIn = async () => {
-    setLoadingGoogle(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (mode === 'signup' && password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
     setError(null);
+
     try {
-      await loginWithGoogle();
+      if (mode === 'signin') {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password);
+      }
       onSuccess();
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/popup-blocked') {
-        setError('The sign-in popup was blocked by your browser. Please allow popups, or click the "Open in New Tab" button below to authenticate.');
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        setError('The Google Sign-In window was closed. If you are using the embedded preview, click the "Open in New Tab" button below to sign in successfully.');
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        setError('The sign-in request was cancelled. Please try again.');
-      } else {
-        setError(err.message || 'Failed to sign in with Google. Please try again.');
+      let message = err.message || 'Authentication failed.';
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        message = 'Invalid email or password. Please try again.';
+      } else if (err.code === 'auth/email-already-in-use') {
+        message = 'This email is already in use. Please sign in instead.';
+      } else if (err.code === 'auth/invalid-email') {
+        message = 'Please enter a valid email address.';
+      } else if (err.code === 'auth/weak-password') {
+        message = 'The password is too weak. Please use at least 6 characters.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        message = 'Email/Password authentication is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.';
       }
+      setError(message);
     } finally {
-      setLoadingGoogle(false);
+      setLoading(false);
     }
   };
 
@@ -53,7 +81,7 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
     }
   };
 
-  const isLoading = loadingGoogle || loadingGuest;
+  const isLoading = loading || loadingGuest;
 
   return (
     <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 md:p-6 text-neutral-100 font-sans relative overflow-hidden" id="auth-screen-root">
@@ -98,51 +126,120 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
         )}
 
         {/* Action Portal */}
-        <div className="w-full space-y-4" id="action-portal-container">
-          {/* Real Firebase Backend Sign In */}
-          <div className="space-y-1.5 w-full">
+        <div className="w-full space-y-5 text-left" id="action-portal-container">
+          <form onSubmit={handleSubmit} className="space-y-4 w-full" id="auth-credentials-form">
+            {/* Email Field */}
+            <div className="space-y-1.5" id="email-field-group">
+              <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Email Address</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-neutral-500">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  type="email"
+                  required
+                  disabled={isLoading}
+                  placeholder="name@domain.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-900/60 border border-neutral-800/80 focus:border-primary-custom/60 text-sm placeholder:text-neutral-600 text-neutral-100 outline-none transition duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-1.5" id="password-field-group">
+              <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Password</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-neutral-500">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  required
+                  disabled={isLoading}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-900/60 border border-neutral-800/80 focus:border-primary-custom/60 text-sm placeholder:text-neutral-600 text-neutral-100 outline-none transition duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Confirm Password Field (Only during registration) */}
+            {mode === 'signup' && (
+              <div className="space-y-1.5 animate-fade-in" id="confirm-password-field-group">
+                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Confirm Password</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-neutral-500">
+                    <Lock className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    disabled={isLoading}
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-900/60 border border-neutral-800/80 focus:border-primary-custom/60 text-sm placeholder:text-neutral-600 text-neutral-100 outline-none transition duration-200"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Submit Button */}
             <button
-              type="button"
-              onClick={handleGoogleSignIn}
+              type="submit"
               disabled={isLoading}
-              className="w-full group bg-gradient-to-r from-primary-custom to-orange-600 hover:from-primary-custom/95 hover:to-orange-600/95 active:scale-[0.98] disabled:opacity-50 text-white font-medium text-sm py-3.5 px-6 rounded-2xl shadow-lg shadow-primary-custom/10 flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer"
-              id="google-signin-btn"
+              className="w-full group mt-2 bg-gradient-to-r from-primary-custom to-orange-600 hover:from-primary-custom/95 hover:to-orange-600/95 active:scale-[0.98] disabled:opacity-50 text-white font-medium text-sm py-3.5 px-6 rounded-2xl shadow-lg shadow-primary-custom/10 flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer"
+              id="submit-auth-btn"
             >
-              {loadingGoogle ? (
+              {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
+              ) : mode === 'signin' ? (
                 <>
                   <LogIn className="w-4 h-4" />
-                  <span>Sign in with Google</span>
+                  <span>Sign In</span>
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform ml-auto opacity-60" />
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Create Account</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform ml-auto opacity-60" />
                 </>
               )}
             </button>
-            <p className="text-[10px] text-neutral-500 leading-normal max-w-xs mx-auto">
-              If Google Sign-In popups are blocked or closed in the iframe, use the button below to open in a full window.
-            </p>
+          </form>
+
+          {/* Mode Switcher */}
+          <div className="text-center" id="mode-switcher-container">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => {
+                setMode(mode === 'signin' ? 'signup' : 'signin');
+                setError(null);
+              }}
+              className="text-xs text-neutral-400 hover:text-primary-custom hover:underline transition cursor-pointer"
+              id="toggle-mode-btn"
+            >
+              {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+            </button>
           </div>
 
-          {/* New Tab Option */}
-          {isInIframe && (
-            <a
-              href={window.location.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl bg-neutral-900/80 hover:bg-neutral-900 text-primary-custom border border-primary-custom/30 font-medium text-sm transition-all duration-200 cursor-pointer text-center"
-              id="open-new-tab-btn"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Open App in New Tab</span>
-            </a>
-          )}
+          <div className="relative flex py-2 items-center text-xs" id="auth-divider">
+            <div className="flex-grow border-t border-neutral-800/40"></div>
+            <span className="flex-shrink mx-4 text-neutral-600 font-medium">or</span>
+            <div className="flex-grow border-t border-neutral-800/40"></div>
+          </div>
 
           {/* Local Guest Fallback Option */}
           <button
             type="button"
             onClick={handleEnterVault}
             disabled={isLoading}
-            className="w-full py-3.5 px-6 rounded-2xl bg-neutral-900/40 hover:bg-neutral-900/60 text-neutral-400 hover:text-white border border-neutral-800/40 font-medium text-sm transition-all duration-200 cursor-pointer"
+            className="w-full py-3.5 px-6 rounded-2xl bg-neutral-900/40 hover:bg-neutral-900/60 text-neutral-400 hover:text-white border border-neutral-800/40 font-medium text-sm transition-all duration-200 cursor-pointer text-center"
             id="local-vault-btn"
           >
             {loadingGuest ? (
