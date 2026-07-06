@@ -7,6 +7,8 @@ import {
   setDoc, 
   deleteDoc, 
   onSnapshot,
+  GoogleAuthProvider,
+  signInWithPopup,
   User 
 } from '../firebase';
 import { 
@@ -58,6 +60,7 @@ interface CineTrackContextType {
   getItemRating: (targetId: number | string, type: 'movie' | 'tv' | 'episode') => number;
   getItemNote: (targetId: number | string, type: 'movie' | 'tv' | 'episode') => string;
   loginAsGuest: () => void;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -537,6 +540,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  };
+
   const logout = async () => {
     localStorage.removeItem('cine_track_guest_active');
     await auth.signOut().catch(() => {});
@@ -608,6 +616,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       getItemRating,
       getItemNote,
       loginAsGuest,
+      loginWithGoogle,
       logout
     }}>
       {children}

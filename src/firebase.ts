@@ -6,6 +6,8 @@ import {
   signOut, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   User
 } from 'firebase/auth';
 import { 
@@ -68,6 +70,8 @@ export {
   signOut, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   collection,
   doc,
   setDoc,
