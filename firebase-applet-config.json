@@ -1,10 +1,10 @@
 {
-  "projectId": "geometric-seat-scf5x",
-  "appId": "1:577763442182:web:4e1ee872e8cb3229648d87",
-  "apiKey": "AIzaSyDz9feQ8RcaZGh1KDaiiqyEMwsJ6lOqTD0",
-  "authDomain": "geometric-seat-scf5x.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-cinetrack-20bb730d-d9e7-4d43-8cfe-e9475fb56e93",
-  "storageBucket": "geometric-seat-scf5x.firebasestorage.app",
-  "messagingSenderId": "577763442182",
-  "measurementId": ""
+  "projectId": "my-cinetrack",
+  "appId": "1:384229555160:web:f2ca5aadef5e84c1b010ad",
+  "apiKey": "AIzaSyApZCgdjauV6VCZ_oyrUZU5evxaz1NfXWQ",
+  "authDomain": "my-cinetrack.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "my-cinetrack.firebasestorage.app",
+  "messagingSenderId": "384229555160",
+  "measurementId": "G-7848TEM3K9"
 }
