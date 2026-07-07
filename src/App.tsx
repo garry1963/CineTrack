@@ -18,6 +18,19 @@ function Dashboard() {
   const { user, loading, settings, logout } = useCineTrack();
   const [currentView, setCurrentView] = useState<ViewState>({ type: 'home' });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [serverHasTmdbKey, setServerHasTmdbKey] = useState<boolean | null>(null);
+
+  // Fetch server status to see if TMDB key is configured on the backend
+  useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.hasTmdbKey === 'boolean') {
+          setServerHasTmdbKey(data.hasTmdbKey);
+        }
+      })
+      .catch((err) => console.error('Error checking server health:', err));
+  }, []);
 
   // Apply visual theme class on boot or settings load
   useEffect(() => {
@@ -98,8 +111,8 @@ function Dashboard() {
         
         {/* Missing API Key warning banner */}
         {!settings.tmdbApiKey && 
-         (!(import.meta as any).env?.VITE_TMDB_API_KEY || (import.meta as any).env?.VITE_TMDB_API_KEY === 'YOUR_TMDB_API_KEY') && 
-         (typeof process === 'undefined' || !process.env || process.env.TMDB_API_KEY === 'YOUR_TMDB_API_KEY') && (
+         serverHasTmdbKey === false &&
+         (!(import.meta as any).env?.VITE_TMDB_API_KEY || (import.meta as any).env?.VITE_TMDB_API_KEY === 'YOUR_TMDB_API_KEY') && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3.5 items-start md:items-center">
             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 md:mt-0" />
             <div className="text-xs leading-relaxed text-slate-300 flex-1 md:flex md:items-center md:justify-between gap-4">

@@ -22,7 +22,12 @@ app.use(express.json());
 
 // API health endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const hasTmdbKey = !!process.env.TMDB_API_KEY && process.env.TMDB_API_KEY !== 'YOUR_TMDB_API_KEY';
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    hasTmdbKey
+  });
 });
 
 // TMDB API Proxy
