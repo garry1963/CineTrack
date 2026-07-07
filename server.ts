@@ -41,8 +41,16 @@ app.get('/api/tmdb', async (req, res) => {
   // Get TMDB Key (with fallback to client-supplied key if the server doesn't have one configured)
   let tmdbKey = process.env.TMDB_API_KEY;
   const clientKey = req.headers['x-tmdb-key'] || req.query.user_api_key;
-  if (clientKey && typeof clientKey === 'string' && clientKey !== 'YOUR_TMDB_API_KEY') {
-    tmdbKey = clientKey;
+  
+  const isValidClientKey = clientKey && 
+    typeof clientKey === 'string' && 
+    clientKey !== 'YOUR_TMDB_API_KEY' && 
+    clientKey !== 'undefined' && 
+    clientKey !== 'null' && 
+    clientKey.trim() !== '';
+
+  if (isValidClientKey) {
+    tmdbKey = clientKey as string;
   }
 
   if (!tmdbKey || tmdbKey === 'YOUR_TMDB_API_KEY') {
