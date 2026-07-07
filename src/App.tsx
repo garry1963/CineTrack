@@ -76,7 +76,7 @@ function Dashboard() {
       case 'search':
         return <SearchView onNavigate={handleNavigate} />;
       case 'watchlist':
-        return <WatchlistView onNavigate={handleNavigate} />;
+        return <WatchlistView currentView={currentView} onNavigate={handleNavigate} />;
       case 'calendar':
         return <CalendarView onNavigate={handleNavigate} />;
       case 'statistics':

@@ -10,7 +10,7 @@ interface HomeViewProps {
 }
 
 export default function HomeView({ onNavigate }: HomeViewProps) {
-  const { watchlist, favorites, showProgress, watchedMovies } = useCineTrack();
+  const { watchlist, favorites, showProgress, watchedMovies, customLists } = useCineTrack();
   const [trendingMovies, setTrendingMovies] = useState<TMDBMedia[]>([]);
   const [trendingTV, setTrendingTV] = useState<TMDBMedia[]>([]);
   const [upcomingMovies, setUpcomingMovies] = useState<TMDBMedia[]>([]);
@@ -75,6 +75,65 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   return (
     <div className="space-y-10 pb-16">
       
+      {/* Home Screen Header with List Dropdown */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-custom pb-6" id="home-view-header-row">
+        <div>
+          <h1 className="font-display font-extrabold text-2xl md:text-3xl tracking-tight text-foreground" id="welcome-home-title">
+            Your CineTrack
+          </h1>
+          <p className="text-xs text-muted-custom" id="welcome-home-subtitle">
+            Personal tracking suite for movies, TV series, and seasonal releases.
+          </p>
+        </div>
+        
+        {/* Dropdown list selector */}
+        <div className="relative min-w-[240px] max-w-sm" id="home-list-dropdown-container">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-custom mb-1.5" id="home-list-dropdown-label">
+            Quick List Navigator
+          </label>
+          <div className="relative">
+            <select
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                if (val === 'watchlist') {
+                  onNavigate({ type: 'watchlist', tab: 'watchlist', listId: null });
+                } else if (val === 'favorites') {
+                  onNavigate({ type: 'watchlist', tab: 'favorites', listId: null });
+                } else {
+                  onNavigate({ type: 'watchlist', tab: 'custom_lists', listId: val });
+                }
+                // Reset select value to allow selecting same list again later if needed
+                e.target.value = '';
+              }}
+              defaultValue=""
+              className="w-full bg-card hover:bg-slate-800/20 border border-border-custom text-xs font-bold text-foreground py-2.5 pl-3.5 pr-10 rounded-xl outline-none focus:border-primary-custom cursor-pointer transition shadow-sm appearance-none"
+              id="home-quick-list-dropdown"
+            >
+              <option value="" disabled>Choose a list to view...</option>
+              <optgroup label="Default Spaces" className="bg-card text-foreground">
+                <option value="watchlist">Watchlist ({watchlist.length})</option>
+                <option value="favorites">Favorites ({favorites.length})</option>
+              </optgroup>
+              {customLists && customLists.length > 0 ? (
+                <optgroup label="Your Themed Lists" className="bg-card text-foreground">
+                  {customLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name} ({list.items.length})
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-muted-custom">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Hero Random Recommendation Backdrop Banner */}
       {randomRecommendation && (
         <div className="relative rounded-3xl overflow-hidden aspect-backdrop w-full max-h-[380px] bg-slate-900 group shadow-lg">

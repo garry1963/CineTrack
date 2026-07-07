@@ -2,7 +2,7 @@ export type ViewState =
   | { type: 'home' }
   | { type: 'discover' }
   | { type: 'search' }
-  | { type: 'watchlist' }
+  | { type: 'watchlist'; tab?: 'watchlist' | 'favorites' | 'custom_lists'; listId?: string | null }
   | { type: 'calendar' }
   | { type: 'statistics' }
   | { type: 'profile' }

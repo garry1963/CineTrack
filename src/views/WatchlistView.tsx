@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { ViewState, CustomList } from '../types';
 import { getPosterUrl } from '../lib/utils';
@@ -6,10 +6,11 @@ import { Bookmark, Star, Trash2, Plus, X, List, Film, Tv, Heart, ClipboardList, 
 import { tmdb } from '../services/tmdb';
 
 interface WatchlistViewProps {
+  currentView?: ViewState;
   onNavigate: (view: ViewState) => void;
 }
 
-export default function WatchlistView({ onNavigate }: WatchlistViewProps) {
+export default function WatchlistView({ currentView, onNavigate }: WatchlistViewProps) {
   const { 
     watchlist, 
     favorites, 
@@ -23,6 +24,18 @@ export default function WatchlistView({ onNavigate }: WatchlistViewProps) {
   const [activeTab, setActiveTab] = useState<'watchlist' | 'favorites' | 'custom_lists'>('watchlist');
   const [filterType, setFilterType] = useState<'all' | 'movie' | 'tv'>('all');
   const [sortOption, setSortOption] = useState<'added' | 'alpha'>('added');
+
+  // Sync state from currentView prop
+  useEffect(() => {
+    if (currentView && currentView.type === 'watchlist') {
+      if (currentView.tab) {
+        setActiveTab(currentView.tab);
+      }
+      if (currentView.listId !== undefined) {
+        setActiveListId(currentView.listId);
+      }
+    }
+  }, [currentView]);
 
   // Custom List State
   const [showCreateModal, setShowCreateModal] = useState(false);
