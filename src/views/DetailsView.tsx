@@ -1,17 +1,246 @@
 import React, { useState, useEffect } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { tmdb } from '../services/tmdb';
-import { TMDBMedia, TMDBSeason, TMDBEpisode, ViewState, MovieStatus } from '../types';
+import { TMDBMedia, TMDBSeason, TMDBEpisode, ViewState, MovieStatus, CustomList } from '../types';
 import { getPosterUrl, getBackdropUrl, formatDate, formatCurrency, formatRuntime } from '../lib/utils';
 import { 
   Star, Bookmark, Heart, ChevronLeft, Calendar, 
-  MessageSquare, Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv 
+  MessageSquare, Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv,
+  Plus, List
 } from 'lucide-react';
 import RedditBrowser from '../components/RedditBrowser';
 
 interface DetailsViewProps {
   currentView: ViewState;
   onNavigate: (view: ViewState) => void;
+}
+
+interface ListSelectorProps {
+  media: TMDBMedia;
+  mediaType: 'movie' | 'tv';
+  watchlist: any[];
+  favorites: any[];
+  customLists: CustomList[];
+  addToWatchlist: (media: TMDBMedia, mediaType: 'movie' | 'tv') => Promise<void>;
+  removeFromWatchlist: (tmdbId: number, mediaType: 'movie' | 'tv') => Promise<void>;
+  toggleFavorite: (media: TMDBMedia, mediaType: 'movie' | 'tv') => Promise<void>;
+  saveCustomList: (list: Partial<CustomList>) => Promise<void>;
+}
+
+function ListSelector({
+  media,
+  mediaType,
+  watchlist,
+  favorites,
+  customLists,
+  addToWatchlist,
+  removeFromWatchlist,
+  toggleFavorite,
+  saveCustomList
+}: ListSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  const isWatchlisted = watchlist.some(w => w.id === `${mediaType}_${media.id}`);
+  const isFav = favorites.some(f => f.id === `${mediaType}_${media.id}`);
+
+  const handleToggleWatchlist = async () => {
+    if (isWatchlisted) {
+      await removeFromWatchlist(media.id, mediaType);
+    } else {
+      await addToWatchlist(media, mediaType);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    await toggleFavorite(media, mediaType);
+  };
+
+  const isItemInCustomList = (list: CustomList) => {
+    return list.items.some(item => item.tmdbId === media.id);
+  };
+
+  const handleToggleCustomList = async (list: CustomList) => {
+    const isInList = isItemInCustomList(list);
+    let updatedItems;
+    if (isInList) {
+      updatedItems = list.items.filter(item => item.tmdbId !== media.id);
+    } else {
+      updatedItems = [
+        ...list.items,
+        {
+          tmdbId: media.id,
+          mediaType,
+          title: media.title || media.name || '',
+          posterPath: media.poster_path
+        }
+      ];
+    }
+    await saveCustomList({
+      ...list,
+      items: updatedItems
+    });
+  };
+
+  const handleCreateAndAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newListName.trim()) return;
+
+    const listId = `list_${Math.random().toString(36).substr(2, 9)}`;
+    const newList: CustomList = {
+      id: listId,
+      name: newListName.trim(),
+      description: '',
+      artworkUrl: null,
+      items: [
+        {
+          tmdbId: media.id,
+          mediaType,
+          title: media.title || media.name || '',
+          posterPath: media.poster_path
+        }
+      ],
+      createdAt: Date.now(),
+      order: customLists.length
+    };
+
+    await saveCustomList(newList);
+    setNewListName('');
+    setIsCreating(false);
+  };
+
+  return (
+    <div className="relative inline-block text-left" id={`list-selector-${mediaType}-${media.id}`}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="px-4 py-2.5 bg-primary-custom hover:bg-primary-custom/90 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-md cursor-pointer"
+        id={`add-to-list-trigger-${media.id}`}
+      >
+        <Plus className="w-4 h-4" />
+        <span>Add to List...</span>
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Transparent click-outside overlay */}
+          <div 
+            className="fixed inset-0 z-30" 
+            onClick={() => { setIsOpen(false); setIsCreating(false); }} 
+          />
+          
+          <div 
+            className="origin-top-right absolute left-0 mt-2 w-72 rounded-2xl shadow-xl bg-card border border-border-custom ring-1 ring-black ring-opacity-5 z-40 focus:outline-none divide-y divide-border-custom overflow-hidden"
+            id={`list-selector-dropdown-${media.id}`}
+          >
+            {/* Standard Lists */}
+            <div className="py-2.5 px-3 space-y-1">
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-custom px-2 mb-1">
+                Standard Lists
+              </span>
+              
+              <button
+                type="button"
+                onClick={handleToggleWatchlist}
+                className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold text-foreground hover:bg-slate-800/10 rounded-xl transition text-left"
+              >
+                <span className="flex items-center gap-2">
+                  <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'text-primary-custom fill-current' : 'text-muted-custom'}`} />
+                  <span>Watchlist</span>
+                </span>
+                {isWatchlisted && <Check className="w-3.5 h-3.5 text-primary-custom" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleFavorite}
+                className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold text-foreground hover:bg-slate-800/10 rounded-xl transition text-left"
+              >
+                <span className="flex items-center gap-2">
+                  <Heart className={`w-3.5 h-3.5 ${isFav ? 'text-rose-500 fill-current' : 'text-muted-custom'}`} />
+                  <span>Favorites</span>
+                </span>
+                {isFav && <Check className="w-3.5 h-3.5 text-rose-500" />}
+              </button>
+            </div>
+
+            {/* Custom Lists */}
+            <div className="py-2.5 px-3 space-y-1 max-h-48 overflow-y-auto">
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-custom px-2 mb-1">
+                Your Custom Lists
+              </span>
+
+              {customLists.length === 0 ? (
+                <p className="text-[10px] text-muted-custom px-2.5 py-1">
+                  No custom lists created yet.
+                </p>
+              ) : (
+                customLists.map(list => {
+                  const isInList = isItemInCustomList(list);
+                  return (
+                    <button
+                      key={list.id}
+                      type="button"
+                      onClick={() => handleToggleCustomList(list)}
+                      className="w-full flex items-center justify-between px-2.5 py-2 text-xs font-semibold text-foreground hover:bg-slate-800/10 rounded-xl transition text-left"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary-custom shrink-0" />
+                        <span className="truncate">{list.name}</span>
+                      </span>
+                      {isInList && <Check className="w-3.5 h-3.5 text-primary-custom" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Create list quick field */}
+            <div className="p-3 bg-slate-900/10">
+              {!isCreating ? (
+                <button
+                  type="button"
+                  onClick={() => setIsCreating(true)}
+                  className="w-full py-2 bg-background hover:bg-slate-800/20 border border-border-custom text-[11px] font-bold text-muted-custom hover:text-foreground rounded-xl flex items-center justify-center gap-1 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-primary-custom" />
+                  <span>Create New List...</span>
+                </button>
+              ) : (
+                <form onSubmit={handleCreateAndAdd} className="space-y-2">
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="List name..."
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    className="w-full bg-background border border-border-custom px-2.5 py-1.5 rounded-lg text-xs text-foreground outline-none focus:border-primary-custom"
+                  />
+                  <div className="flex gap-1.5 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreating(false); setNewListName(''); }}
+                      className="px-2 py-1 border border-border-custom hover:bg-background rounded-lg text-[10px] font-semibold text-muted-custom cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-2 py-1 bg-primary-custom hover:bg-primary-custom/90 text-white rounded-lg text-[10px] font-semibold cursor-pointer"
+                    >
+                      Create & Add
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function DetailsView({ currentView, onNavigate }: DetailsViewProps) {
@@ -30,7 +259,9 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
     rateItem,
     getItemRating,
     saveNote,
-    getItemNote
+    getItemNote,
+    customLists,
+    saveCustomList
   } = useCineTrack();
 
   const [media, setMedia] = useState<TMDBMedia | null>(null);
@@ -199,6 +430,19 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
               <span>Favorite</span>
             </button>
+
+            {/* List Selector dropdown */}
+            <ListSelector
+              media={media}
+              mediaType="movie"
+              watchlist={watchlist}
+              favorites={favorites}
+              customLists={customLists}
+              addToWatchlist={addToWatchlist}
+              removeFromWatchlist={removeFromWatchlist}
+              toggleFavorite={toggleFavorite}
+              saveCustomList={saveCustomList}
+            />
 
             {/* Notes & Rating edit button */}
             <button
@@ -462,6 +706,19 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
               <span>Favorite Show</span>
             </button>
+
+            {/* List Selector dropdown */}
+            <ListSelector
+              media={media}
+              mediaType="tv"
+              watchlist={watchlist}
+              favorites={favorites}
+              customLists={customLists}
+              addToWatchlist={addToWatchlist}
+              removeFromWatchlist={removeFromWatchlist}
+              toggleFavorite={toggleFavorite}
+              saveCustomList={saveCustomList}
+            />
 
             <button
               onClick={() => {
