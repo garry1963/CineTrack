@@ -22,6 +22,7 @@ export interface AppSettings {
   autoSync: boolean;
   cacheSize: string; // e.g. "50MB"
   tmdbApiKey?: string;
+  homeSections?: string[];
 }
 
 // TMDB Standard Structures
