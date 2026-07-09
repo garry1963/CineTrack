@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { auth, signOut } from '../firebase';
 import { AppSettings, ThemeMode } from '../types';
-import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw } from 'lucide-react';
+import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2 } from 'lucide-react';
 
 export default function ProfileView() {
   const { 
@@ -17,12 +17,57 @@ export default function ProfileView() {
     ratings,
     notes,
     customLists,
-    logout
+    logout,
+    sharedUser,
+    isViewingShared,
+    loadSharedAccountByEmail,
+    loadSharedAccountByUid,
+    stopViewingSharedAccount,
+    mergeSharedAccountData
   } = useCineTrack();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  const [friendInput, setFriendInput] = useState('');
+  const [loadingFriend, setLoadingFriend] = useState(false);
+  const [friendError, setFriendError] = useState('');
+  const [friendSuccess, setFriendSuccess] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [uidCopied, setUidCopied] = useState(false);
+
+  const handleLoadSharedFriend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!friendInput.trim()) return;
+
+    setLoadingFriend(true);
+    setFriendError('');
+    setFriendSuccess(false);
+
+    try {
+      const input = friendInput.trim();
+      let success = false;
+      
+      if (input.includes('@')) {
+        success = await loadSharedAccountByEmail(input);
+      } else {
+        success = await loadSharedAccountByUid(input);
+      }
+
+      if (success) {
+        setFriendSuccess(true);
+        setFriendInput('');
+      } else {
+        setFriendError('No profile matching that email or ID was found. Ensure your friend has signed in with a valid cloud tracking account.');
+      }
+    } catch (err) {
+      console.error(err);
+      setFriendError('An error occurred while linking the account.');
+    } finally {
+      setLoadingFriend(false);
+    }
+  };
 
   const handleThemeChange = async (mode: ThemeMode) => {
     // Save to context settings
@@ -291,6 +336,121 @@ export default function ProfileView() {
 
         </div>
 
+      </div>
+
+      {/* Share Account & Tracking Data Panel */}
+      <div className="bg-card border border-border-custom p-6 rounded-3xl space-y-6 shadow-sm">
+        <div className="flex items-center gap-2 pb-3 border-b border-border-custom">
+          <Share2 className="w-5 h-5 text-primary-custom" />
+          <h3 className="font-display font-bold text-base text-foreground">Share Account & Tracking Data</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Share outbound */}
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider text-muted-custom">Share Your Tracking Database</h4>
+              <p className="text-[11px] text-muted-custom leading-relaxed mt-1">
+                Give friends real-time access to view your watchlist, favorites, customs, ratings, progress, and movie notes.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Copy share link */}
+              <div>
+                <label className="text-[10px] font-bold text-muted-custom block mb-1">Your Direct Share Link</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={user && user.uid !== 'guest_user' ? `${window.location.origin}${window.location.pathname}?share=${user.uid}` : 'Sign in with a cloud account to generate link'}
+                    className="flex-1 bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-mono text-muted-custom outline-none select-all"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!user || user.uid === 'guest_user') return;
+                      navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?share=${user.uid}`);
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2000);
+                    }}
+                    disabled={!user || user.uid === 'guest_user'}
+                    className="px-4 py-2 bg-primary-custom hover:bg-primary-custom/90 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    {linkCopied ? 'Copied!' : 'Copy Link'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Direct share UID */}
+              <div>
+                <label className="text-[10px] font-bold text-muted-custom block mb-1">Your Share ID (UID)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={user && user.uid !== 'guest_user' ? user.uid : 'Sign in with a cloud account to generate ID'}
+                    className="flex-1 bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-mono text-muted-custom outline-none select-all"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!user || user.uid === 'guest_user') return;
+                      navigator.clipboard.writeText(user.uid);
+                      setUidCopied(true);
+                      setTimeout(() => setUidCopied(false), 2000);
+                    }}
+                    disabled={!user || user.uid === 'guest_user'}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    {uidCopied ? 'Copied!' : 'Copy ID'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Share inbound */}
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider text-muted-custom">Connect to a Friend's Library</h4>
+              <p className="text-[11px] text-muted-custom leading-relaxed mt-1">
+                Enter your friend's account email address or direct Share ID below to view their tracking collections and lists in real-time.
+              </p>
+            </div>
+
+            <form onSubmit={handleLoadSharedFriend} className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold text-muted-custom block mb-1">Friend's Email Address or Share ID</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. friend@example.com or user_uid_here..."
+                    value={friendInput}
+                    onChange={(e) => setFriendInput(e.target.value)}
+                    className="flex-1 bg-background border border-border-custom px-3.5 py-2.5 rounded-xl text-xs text-foreground outline-none focus:border-primary-custom/50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loadingFriend}
+                    className="px-4 py-2.5 bg-primary-custom hover:bg-primary-custom/90 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {loadingFriend ? 'Searching...' : 'Connect'}
+                  </button>
+                </div>
+                {friendError && (
+                  <p className="text-[10px] text-red-500 font-semibold mt-1">
+                    {friendError}
+                  </p>
+                )}
+                {friendSuccess && (
+                  <p className="text-[10px] text-emerald-500 font-semibold mt-1">
+                    Successfully loaded shared library!
+                  </p>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
 
     </div>

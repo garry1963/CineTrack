@@ -5,6 +5,10 @@ import {
   collection, 
   doc, 
   setDoc, 
+  getDoc,
+  getDocs,
+  query,
+  where,
   deleteDoc, 
   onSnapshot,
   GoogleAuthProvider,
@@ -42,6 +46,14 @@ interface CineTrackContextType {
   notes: UserNote[];
   customLists: CustomList[];
   settings: AppSettings;
+  
+  // Share attributes
+  sharedUser: { uid: string; email: string; displayName: string } | null;
+  isViewingShared: boolean;
+  loadSharedAccountByEmail: (email: string) => Promise<boolean>;
+  loadSharedAccountByUid: (uid: string) => Promise<boolean>;
+  stopViewingSharedAccount: () => void;
+  mergeSharedAccountData: () => Promise<void>;
   
   addToWatchlist: (media: TMDBMedia, mediaType: 'movie' | 'tv') => Promise<void>;
   removeFromWatchlist: (tmdbId: number, mediaType: 'movie' | 'tv') => Promise<void>;
@@ -88,6 +100,39 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 
+  const [dbUserId, setDbUserId] = useState<string | null>(null);
+  const [sharedUser, setSharedUser] = useState<{ uid: string; email: string; displayName: string } | null>(null);
+
+  // Sync dbUserId when logged in user changes
+  useEffect(() => {
+    if (user) {
+      setDbUserId(user.uid);
+      setSharedUser(null);
+    } else {
+      setDbUserId(null);
+      setSharedUser(null);
+    }
+  }, [user]);
+
+  // Update user profile mapping in Firestore for sharing lookup
+  useEffect(() => {
+    if (user && user.uid !== 'guest_user' && user.email) {
+      const updateProfile = async () => {
+        try {
+          await setDoc(doc(db, 'profiles', user.uid), {
+            uid: user.uid,
+            email: user.email.toLowerCase(),
+            displayName: user.email.split('@')[0],
+            lastActive: Date.now()
+          }, { merge: true });
+        } catch (err) {
+          console.error('Error updating share profile mapping:', err);
+        }
+      };
+      updateProfile();
+    }
+  }, [user]);
+
   // Auth Listener
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
@@ -123,9 +168,9 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
   // Sync with Firestore or LocalStorage Guest Cache
   useEffect(() => {
-    if (!user) return;
+    if (!dbUserId) return;
 
-    if (user.uid === 'guest_user') {
+    if (dbUserId === 'guest_user') {
       setLoading(true);
       try {
         setWatchlist(JSON.parse(localStorage.getItem('cine_watchlist') || '[]'));
@@ -151,7 +196,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(true);
-    const userId = user.uid;
+    const userId = dbUserId;
 
     const unsubWatchlist = onSnapshot(collection(db, 'users', userId, 'watchlist'), (snap) => {
       setWatchlist(snap.docs.map(doc => doc.data() as WatchlistItem));
@@ -216,7 +261,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       unsubCustomLists();
       unsubSettings();
     };
-  }, [user]);
+  }, [dbUserId]);
 
   // Operations
   const addToWatchlist = async (media: TMDBMedia, mediaType: 'movie' | 'tv') => {
@@ -560,6 +605,130 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     setSettings(defaultSettings);
   };
 
+  // Share functions
+  const loadSharedAccountByEmail = async (email: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const q = query(collection(db, 'profiles'), where('email', '==', cleanEmail));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const profileData = snap.docs[0].data();
+        setDbUserId(profileData.uid);
+        setSharedUser({
+          uid: profileData.uid,
+          email: profileData.email,
+          displayName: profileData.displayName || profileData.email.split('@')[0]
+        });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error loading shared account by email:', err);
+      return false;
+    }
+  };
+
+  const loadSharedAccountByUid = async (uid: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const docSnap = await getDoc(doc(db, 'profiles', uid));
+      if (docSnap.exists()) {
+        const profileData = docSnap.data();
+        setDbUserId(profileData.uid);
+        setSharedUser({
+          uid: profileData.uid,
+          email: profileData.email,
+          displayName: profileData.displayName || profileData.email.split('@')[0]
+        });
+        return true;
+      } else {
+        setDbUserId(uid);
+        setSharedUser({
+          uid: uid,
+          email: 'Shared Account',
+          displayName: 'Shared Member'
+        });
+        return true;
+      }
+    } catch (err) {
+      console.error('Error loading shared account by uid:', err);
+      return false;
+    }
+  };
+
+  const stopViewingSharedAccount = () => {
+    if (user) {
+      setDbUserId(user.uid);
+      setSharedUser(null);
+    }
+  };
+
+  const mergeSharedAccountData = async () => {
+    if (!user || user.uid === 'guest_user' || !sharedUser) return;
+    const currentUid = user.uid;
+
+    try {
+      // 1. Merge Watchlist
+      for (const item of watchlist) {
+        await setDoc(doc(db, 'users', currentUid, 'watchlist', item.id), item);
+      }
+
+      // 2. Merge Favorites
+      for (const item of favorites) {
+        await setDoc(doc(db, 'users', currentUid, 'favorites', item.id), item);
+      }
+
+      // 3. Merge Show Progress
+      for (const item of showProgress) {
+        await setDoc(doc(db, 'users', currentUid, 'show_progress', `${item.showId}`), item);
+      }
+
+      // 4. Merge Watched Episodes
+      for (const item of watchedEpisodes) {
+        await setDoc(doc(db, 'users', currentUid, 'watched_episodes', item.id), item);
+      }
+
+      // 5. Merge Watched Movies
+      for (const item of watchedMovies) {
+        await setDoc(doc(db, 'users', currentUid, 'watched_movies', `${item.movieId}`), item);
+      }
+
+      // 6. Merge Ratings
+      for (const item of ratings) {
+        await setDoc(doc(db, 'users', currentUid, 'ratings', item.id), item);
+      }
+
+      // 7. Merge Notes
+      for (const item of notes) {
+        await setDoc(doc(db, 'users', currentUid, 'notes', item.id), item);
+      }
+
+      // 8. Merge Custom Lists
+      for (const item of customLists) {
+        await setDoc(doc(db, 'users', currentUid, 'custom_lists', item.id), item);
+      }
+
+      stopViewingSharedAccount();
+    } catch (err) {
+      console.error('Error merging shared data:', err);
+      throw err;
+    }
+  };
+
+  const isViewingShared = dbUserId !== null && user !== null && dbUserId !== user.uid;
+
+  // Check for shared UID in URL query parameters on boot
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shareUid = params.get('share') || params.get('shareUID');
+    if (shareUid && user && user.uid !== 'guest_user') {
+      loadSharedAccountByUid(shareUid);
+      const newUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, [user]);
+
   // Quick Getters
   const isMovieWatched = (movieId: number) => {
     const found = watchedMovies.find(m => m.movieId === movieId);
@@ -598,6 +767,13 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       notes,
       customLists,
       settings,
+      
+      sharedUser,
+      isViewingShared,
+      loadSharedAccountByEmail,
+      loadSharedAccountByUid,
+      stopViewingSharedAccount,
+      mergeSharedAccountData,
       
       addToWatchlist,
       removeFromWatchlist,

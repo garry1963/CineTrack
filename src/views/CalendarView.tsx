@@ -118,7 +118,7 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
 
                     {/* Schedule Text details */}
                     <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-mono font-bold bg-primary-custom/10 text-primary-custom border border-primary-custom/15 px-2 py-0.5 rounded-md uppercase">
                           {activeTab === 'movies' ? 'Movie' : 'TV Show'}
                         </span>
@@ -127,6 +127,9 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                             ★ {item.vote_average.toFixed(1)}
                           </span>
                         )}
+                        <span className="sm:hidden text-[10px] font-bold text-primary-custom ml-auto shrink-0 bg-primary-custom/10 px-2 py-0.5 rounded-md">
+                          {formatDate(dateVal)}
+                        </span>
                       </div>
                       <h3 className="font-display font-extrabold text-sm md:text-base text-foreground truncate group-hover:text-primary-custom transition">
                         {item.title || item.name}

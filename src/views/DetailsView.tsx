@@ -5,10 +5,9 @@ import { TMDBMedia, TMDBSeason, TMDBEpisode, ViewState, MovieStatus, CustomList 
 import { getPosterUrl, getBackdropUrl, formatDate, formatCurrency, formatRuntime } from '../lib/utils';
 import { 
   Star, Bookmark, Heart, ChevronLeft, Calendar, 
-  MessageSquare, Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv,
+  Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv,
   Plus, List
 } from 'lucide-react';
-import RedditBrowser from '../components/RedditBrowser';
 
 interface DetailsViewProps {
   currentView: ViewState;
@@ -269,11 +268,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
   const [episode, setEpisode] = useState<TMDBEpisode | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Reddit Overlay state
-  const [redditUrl, setRedditUrl] = useState<string | null>(null);
-  const [redditTitle, setRedditTitle] = useState('');
-  const [redditSearch, setRedditSearch] = useState('');
-
   // Rating and Notes editor state
   const [showEditor, setShowEditor] = useState(false);
   const [userRating, setUserRating] = useState(0);
@@ -322,13 +316,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
     } else {
       onNavigate({ type: 'home' });
     }
-  };
-
-  const launchRedditDiscussion = (title: string, queryText: string, subreddit: 'movies' | 'television') => {
-    const formattedUrl = `https://www.reddit.com/r/${subreddit}/search/?q=${encodeURIComponent(queryText)}&restrict_sr=1`;
-    setRedditUrl(formattedUrl);
-    setRedditTitle(title);
-    setRedditSearch(queryText);
   };
 
   const handleSaveEditor = async () => {
@@ -487,23 +474,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               <p className="text-muted-custom text-sm leading-relaxed">{media.overview || 'No synopsis available.'}</p>
             </div>
 
-            {/* View Reddit button */}
-            <div className="bg-orange-500/5 border border-orange-500/10 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-orange-400" />
-                  <span>Reddit Discussion</span>
-                </h4>
-                <p className="text-xs text-slate-400">View community reviews and comments on Reddit via standard WebView</p>
-              </div>
-              <button
-                onClick={() => launchRedditDiscussion(`${media.title}`, `${media.title} Movie Discussion`, 'movies')}
-                className="bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-md transition shrink-0"
-              >
-                Launch Reddit WebView
-              </button>
-            </div>
-
             {/* Cast Listing */}
             {media.credits?.cast && media.credits.cast.length > 0 && (
               <div className="space-y-3 pt-4">
@@ -622,16 +592,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
           </div>
         )}
 
-        {/* Reddit standard WebView popup */}
-        {redditUrl && (
-          <RedditBrowser 
-            url={redditUrl} 
-            title={redditTitle} 
-            fallbackSearch={redditSearch} 
-            onClose={() => setRedditUrl(null)} 
-          />
-        )}
-
       </div>
     );
   }
@@ -745,23 +705,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               <p className="text-muted-custom text-sm leading-relaxed">{media.overview || 'No synopsis available.'}</p>
             </div>
 
-            {/* View Reddit button */}
-            <div className="bg-orange-500/5 border border-orange-500/10 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-orange-400" />
-                  <span>Reddit Discussion</span>
-                </h4>
-                <p className="text-xs text-slate-400">Join the discussion with other TV fans on Reddit</p>
-              </div>
-              <button
-                onClick={() => launchRedditDiscussion(`${media.name}`, `${media.name} Show Discussion`, 'television')}
-                className="bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-md transition shrink-0"
-              >
-                Launch Reddit WebView
-              </button>
-            </div>
-
             {/* Seasons List page lookup */}
             <div className="space-y-3 pt-2">
               <h3 className="font-display font-extrabold text-lg text-foreground">Browse Seasons</h3>
@@ -871,15 +814,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               </div>
             </div>
           </div>
-        )}
-
-        {redditUrl && (
-          <RedditBrowser 
-            url={redditUrl} 
-            title={redditTitle} 
-            fallbackSearch={redditSearch} 
-            onClose={() => setRedditUrl(null)} 
-          />
         )}
 
       </div>
@@ -1068,26 +1002,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               <p className="text-muted-custom text-sm leading-relaxed">{episode.overview || 'No synopsis details available for this episode.'}</p>
             </div>
 
-            {/* Reddit thread lookup button */}
-            <div className="bg-orange-500/5 border border-orange-500/10 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <MessageSquare className="w-4 h-4 text-orange-400" />
-                  <span>Reddit Episode Thread</span>
-                </h4>
-                <p className="text-xs text-slate-400">Search discussions on r/television for S{pad(currentView.seasonNumber)}E{pad(currentView.episodeNumber)}</p>
-              </div>
-              <button
-                onClick={() => launchRedditDiscussion(
-                  `${currentView.showName} S${pad(currentView.seasonNumber)}E${pad(currentView.episodeNumber)}`, 
-                  `${currentView.showName} S${pad(currentView.seasonNumber)}E${pad(currentView.episodeNumber)} Discussion`, 
-                  'television'
-                )}
-                className="bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-md transition shrink-0"
-              >
-                Launch Reddit WebView
-              </button>
-            </div>
           </div>
 
           <div className="bg-card border border-border-custom p-4 rounded-3xl h-fit space-y-3.5 text-xs">
@@ -1147,15 +1061,6 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               </div>
             </div>
           </div>
-        )}
-
-        {redditUrl && (
-          <RedditBrowser 
-            url={redditUrl} 
-            title={redditTitle} 
-            fallbackSearch={redditSearch} 
-            onClose={() => setRedditUrl(null)} 
-          />
         )}
 
       </div>
