@@ -1,0 +1,180 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile mapping for public lookup",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "lastActive": { "type": "number" }
+      },
+      "required": ["uid", "email"]
+    },
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "Item in the user's watchlist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tmdbId": { "type": "number" },
+        "mediaType": { "type": "string" },
+        "title": { "type": "string" },
+        "posterPath": { "type": "string" },
+        "addedAt": { "type": "number" }
+      },
+      "required": ["id", "tmdbId", "mediaType", "title"]
+    },
+    "FavoriteItem": {
+      "title": "FavoriteItem",
+      "description": "Item in the user's favorites",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tmdbId": { "type": "number" },
+        "mediaType": { "type": "string" },
+        "title": { "type": "string" },
+        "posterPath": { "type": "string" },
+        "addedAt": { "type": "number" }
+      },
+      "required": ["id", "tmdbId", "mediaType", "title"]
+    },
+    "TVShowProgress": {
+      "title": "TVShowProgress",
+      "description": "TV show progress status",
+      "type": "object",
+      "properties": {
+        "showId": { "type": "number" },
+        "title": { "type": "string" },
+        "posterPath": { "type": "string" },
+        "watchedEpisodesCount": { "type": "number" },
+        "totalEpisodesCount": { "type": "number" },
+        "lastWatchedSeason": { "type": "number" },
+        "lastWatchedEpisode": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["showId", "title", "watchedEpisodesCount", "totalEpisodesCount"]
+    },
+    "WatchedEpisode": {
+      "title": "WatchedEpisode",
+      "description": "Episode watched by user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "showId": { "type": "number" },
+        "showTitle": { "type": "string" },
+        "seasonNumber": { "type": "number" },
+        "episodeNumber": { "type": "number" },
+        "watchedAt": { "type": "number" }
+      },
+      "required": ["id", "showId", "seasonNumber", "episodeNumber"]
+    },
+    "WatchedMovie": {
+      "title": "WatchedMovie",
+      "description": "Movie watched by user",
+      "type": "object",
+      "properties": {
+        "movieId": { "type": "number" },
+        "title": { "type": "string" },
+        "posterPath": { "type": "string" },
+        "status": { "type": "string" },
+        "watchedAt": { "type": "number" }
+      },
+      "required": ["movieId", "title", "status"]
+    },
+    "UserRating": {
+      "title": "UserRating",
+      "description": "Rating given to media",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tmdbId": { "type": "number" },
+        "mediaType": { "type": "string" },
+        "rating": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "tmdbId", "mediaType", "rating"]
+    },
+    "UserNote": {
+      "title": "UserNote",
+      "description": "Private note for media",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tmdbId": { "type": "number" },
+        "mediaType": { "type": "string" },
+        "content": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "tmdbId", "mediaType", "content"]
+    },
+    "CustomList": {
+      "title": "CustomList",
+      "description": "User's custom list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "items": { "type": "array" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "items", "order"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "User app preferences",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string" },
+        "language": { "type": "string" },
+        "tmdbApiKey": { "type": "string" },
+        "homeSections": { "type": "array" }
+      }
+    }
+  },
+  "firestore": {
+    "/profiles/{uid}": {
+      "schema": "Profile",
+      "description": "User profiles for lookup and linking"
+    },
+    "/users/{userId}/watchlist/{docId}": {
+      "schema": "WatchlistItem",
+      "description": "User watchlist items"
+    },
+    "/users/{userId}/favorites/{docId}": {
+      "schema": "FavoriteItem",
+      "description": "User favorite items"
+    },
+    "/users/{userId}/show_progress/{docId}": {
+      "schema": "TVShowProgress",
+      "description": "User progress status for TV shows"
+    },
+    "/users/{userId}/watched_episodes/{docId}": {
+      "schema": "WatchedEpisode",
+      "description": "User watched episodes log"
+    },
+    "/users/{userId}/watched_movies/{docId}": {
+      "schema": "WatchedMovie",
+      "description": "User watched movies status"
+    },
+    "/users/{userId}/ratings/{docId}": {
+      "schema": "UserRating",
+      "description": "User ratings list"
+    },
+    "/users/{userId}/notes/{docId}": {
+      "schema": "UserNote",
+      "description": "User custom movie/tv notes"
+    },
+    "/users/{userId}/custom_lists/{docId}": {
+      "schema": "CustomList",
+      "description": "User custom lists"
+    },
+    "/users/{userId}/settings/preferences": {
+      "schema": "AppSettings",
+      "description": "User app preferences"
+    }
+  }
+}

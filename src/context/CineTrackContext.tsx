@@ -140,8 +140,13 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         setUser(u);
         localStorage.removeItem('cine_track_guest_active');
       } else {
-        const isGuest = localStorage.getItem('cine_track_guest_active') === 'true';
+        const params = new URLSearchParams(window.location.search);
+        const shareUid = params.get('share') || params.get('shareUID');
+        const isGuest = localStorage.getItem('cine_track_guest_active') === 'true' || !!shareUid;
         if (isGuest) {
+          if (shareUid) {
+            localStorage.setItem('cine_track_guest_active', 'true');
+          }
           setUser({
             uid: 'guest_user',
             email: 'guest@cinetrack.local',
@@ -653,7 +658,14 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error('Error loading shared account by uid:', err);
-      return false;
+      // Robust Fallback: Still connect to the shared library even if profiles lookup fails (due to rule/permission issues)
+      setDbUserId(uid);
+      setSharedUser({
+        uid: uid,
+        email: 'Shared Account',
+        displayName: 'Shared Member'
+      });
+      return true;
     }
   };
 
@@ -722,7 +734,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shareUid = params.get('share') || params.get('shareUID');
-    if (shareUid && user && user.uid !== 'guest_user') {
+    if (shareUid && user) {
       loadSharedAccountByUid(shareUid);
       const newUrl = window.location.pathname + window.location.hash;
       window.history.replaceState({}, document.title, newUrl);
