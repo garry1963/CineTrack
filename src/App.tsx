@@ -87,10 +87,6 @@ function Dashboard() {
     );
   }
 
-  if (!user) {
-    return <AuthScreen onSuccess={() => setCurrentView({ type: 'home' })} />;
-  }
-
   // Render proper View component matching the state
   const renderActiveView = () => {
     switch (currentView.type) {
@@ -107,7 +103,9 @@ function Dashboard() {
       case 'statistics':
         return <StatisticsView />;
       case 'profile':
-        return <ProfileView />;
+        return <ProfileView onNavigate={handleNavigate} />;
+      case 'admin-login':
+        return <AuthScreen onSuccess={() => handleNavigate({ type: 'profile' })} />;
       case 'show-details':
       case 'movie-details':
       case 'season-details':
@@ -127,7 +125,7 @@ function Dashboard() {
         onNavigate={handleNavigate}
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
-        userEmail={user.email}
+        userEmail={user?.email || null}
         onLogout={handleLogout}
       />
 
@@ -165,7 +163,8 @@ function Dashboard() {
         {/* Missing API Key warning banner */}
         {!settings.tmdbApiKey && 
          serverHasTmdbKey === false &&
-         (!(import.meta as any).env?.VITE_TMDB_API_KEY || (import.meta as any).env?.VITE_TMDB_API_KEY === 'YOUR_TMDB_API_KEY') && (
+         (!(import.meta as any).env?.VITE_TMDB_API_KEY || (import.meta as any).env?.VITE_TMDB_API_KEY === 'YOUR_TMDB_API_KEY') &&
+         (!(import.meta as any).env?.REACT_APP_TMDB_API_KEY || (import.meta as any).env?.REACT_APP_TMDB_API_KEY === 'YOUR_TMDB_API_KEY') && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3.5 items-start md:items-center">
             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 md:mt-0" />
             <div className="text-xs leading-relaxed text-slate-300 flex-1 md:flex md:items-center md:justify-between gap-4">

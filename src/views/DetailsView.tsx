@@ -6,7 +6,7 @@ import { getPosterUrl, getBackdropUrl, formatDate, formatCurrency, formatRuntime
 import { 
   Star, Bookmark, Heart, ChevronLeft, Calendar, 
   Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv,
-  Plus, List
+  Plus, List, Shield
 } from 'lucide-react';
 
 interface DetailsViewProps {
@@ -244,6 +244,7 @@ function ListSelector({
 
 export default function DetailsView({ currentView, onNavigate }: DetailsViewProps) {
   const { 
+    user,
     watchlist, 
     favorites, 
     addToWatchlist, 
@@ -389,78 +390,110 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
         </div>
 
         {/* Action Controls Panel */}
-        <div className="bg-card border border-border-custom p-4 rounded-3xl shadow-sm flex flex-wrap gap-3.5 items-center justify-between">
-          
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Watchlist toggle */}
-            <button
-              onClick={() => isWatchlisted ? removeFromWatchlist(media.id, 'movie') : addToWatchlist(media, 'movie')}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
-                isWatchlisted 
-                  ? 'bg-primary-custom text-white shadow' 
-                  : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
-              }`}
-            >
-              <Bookmark className="w-4 h-4" />
-              <span>{isWatchlisted ? 'Watchlisted' : 'Add to Watchlist'}</span>
-            </button>
+        {user ? (
+          <div className="bg-card border border-border-custom p-4 rounded-3xl shadow-sm flex flex-wrap gap-3.5 items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Watchlist toggle */}
+              <button
+                onClick={() => isWatchlisted ? removeFromWatchlist(media.id, 'movie') : addToWatchlist(media, 'movie')}
+                className="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition bg-background border border-border-custom text-muted-custom hover:text-foreground cursor-pointer"
+              >
+                <Bookmark className="w-4 h-4" />
+                <span>{isWatchlisted ? 'Watchlisted' : 'Add to Watchlist'}</span>
+              </button>
 
-            {/* Favorite Toggle */}
-            <button
-              onClick={() => toggleFavorite(media, 'movie')}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
-                isFav 
-                  ? 'bg-rose-500/10 text-rose-500 border border-rose-500/25' 
-                  : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
-              }`}
-            >
-              <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
-              <span>Favorite</span>
-            </button>
+              {/* Favorite Toggle */}
+              <button
+                onClick={() => toggleFavorite(media, 'movie')}
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                  isFav 
+                    ? 'bg-rose-500/10 text-rose-500 border border-rose-500/25' 
+                    : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
+                <span>Favorite</span>
+              </button>
 
-            {/* List Selector dropdown */}
-            <ListSelector
-              media={media}
-              mediaType="movie"
-              watchlist={watchlist}
-              favorites={favorites}
-              customLists={customLists}
-              addToWatchlist={addToWatchlist}
-              removeFromWatchlist={removeFromWatchlist}
-              toggleFavorite={toggleFavorite}
-              saveCustomList={saveCustomList}
-            />
+              {/* List Selector dropdown */}
+              <ListSelector
+                media={media}
+                mediaType="movie"
+                watchlist={watchlist}
+                favorites={favorites}
+                customLists={customLists}
+                addToWatchlist={addToWatchlist}
+                removeFromWatchlist={removeFromWatchlist}
+                toggleFavorite={toggleFavorite}
+                saveCustomList={saveCustomList}
+              />
 
-            {/* Notes & Rating edit button */}
-            <button
-              onClick={() => {
-                setUserRating(getItemRating(media.id, 'movie'));
-                setUserNote(getItemNote(media.id, 'movie'));
-                setShowEditor(true);
-              }}
-              className="px-4 py-2.5 bg-background border border-border-custom hover:border-primary-custom text-muted-custom hover:text-foreground rounded-xl font-bold text-xs flex items-center gap-1.5 transition"
-            >
-              <PenTool className="w-4 h-4 text-primary-custom" />
-              <span>Personal Rating & Notes</span>
-            </button>
+              {/* Notes & Rating edit button */}
+              <button
+                onClick={() => {
+                  setUserRating(getItemRating(media.id, 'movie'));
+                  setUserNote(getItemNote(media.id, 'movie'));
+                  setShowEditor(true);
+                }}
+                className="px-4 py-2.5 bg-background border border-border-custom hover:border-primary-custom text-muted-custom hover:text-foreground rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <PenTool className="w-4 h-4 text-primary-custom" />
+                <span>Personal Rating & Notes</span>
+              </button>
+            </div>
+
+            {/* Watch status dropdown */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-custom font-semibold">Your Status:</span>
+              <select
+                value={movieStatus}
+                onChange={(e) => toggleMovieWatched(media.id, media.title || '', media.poster_path, e.target.value as MovieStatus)}
+                className="bg-background border border-border-custom px-3 py-2 rounded-xl font-bold text-foreground outline-none"
+              >
+                <option value="Unwatched">Unwatched</option>
+                <option value="Watched">Watched</option>
+                <option value="Wishlist">Wishlist</option>
+                <option value="Rewatch">Rewatch</option>
+              </select>
+            </div>
           </div>
+        ) : (
+          <div className="bg-card border border-border-custom p-5 rounded-3xl shadow-sm flex flex-col md:flex-row gap-5 justify-between items-start md:items-center">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs">
+              <span className="bg-primary-custom/10 text-primary-custom font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                <span>Read-Only Guest Mode</span>
+              </span>
+              {isWatchlisted && (
+                <span className="bg-slate-800/20 text-foreground border border-border-custom font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Bookmark className="w-3.5 h-3.5 text-primary-custom fill-current" />
+                  <span>On Administrator's Watchlist</span>
+                </span>
+              )}
+              {isFav && (
+                <span className="bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Heart className="w-3.5 h-3.5 fill-current" />
+                  <span>Administrator's Favorite</span>
+                </span>
+              )}
+              {movieStatus && movieStatus !== 'Unwatched' && (
+                <span className="bg-emerald-500/10 text-emerald-500 font-bold px-3 py-1.5 rounded-xl capitalize">
+                  Admin Status: {movieStatus}
+                </span>
+              )}
+            </div>
 
-          {/* Watch status dropdown */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-custom font-semibold">Your Status:</span>
-            <select
-              value={movieStatus}
-              onChange={(e) => toggleMovieWatched(media.id, media.title || '', media.poster_path, e.target.value as MovieStatus)}
-              className="bg-background border border-border-custom px-3 py-2 rounded-xl font-bold text-foreground outline-none"
-            >
-              <option value="Unwatched">Unwatched</option>
-              <option value="Watched">Watched</option>
-              <option value="Wishlist">Wishlist</option>
-              <option value="Rewatch">Rewatch</option>
-            </select>
+            {(userRating > 0 || userNote) && (
+              <div className="bg-background border border-border-custom p-4 rounded-2xl w-full md:max-w-md space-y-2 shrink-0">
+                <div className="flex justify-between items-center pb-2 border-b border-border-custom/50">
+                  <span className="text-[10px] font-extrabold text-muted-custom uppercase tracking-wider">Administrator Review</span>
+                  {userRating > 0 && <span className="text-amber-500 text-xs font-bold">★ {userRating} / 10</span>}
+                </div>
+                {userNote && <p className="text-xs text-foreground italic whitespace-pre-wrap">"{userNote}"</p>}
+              </div>
+            )}
           </div>
-
-        </div>
+        )}
 
         {/* Details Grid: Synopsis & Meta */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -641,58 +674,91 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
         </div>
 
         {/* Action controls */}
-        <div className="bg-card border border-border-custom p-4 rounded-3xl shadow-sm flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={() => isWatchlisted ? removeFromWatchlist(media.id, 'tv') : addToWatchlist(media, 'tv')}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
-                isWatchlisted 
-                  ? 'bg-primary-custom text-white' 
-                  : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
-              }`}
-            >
-              <Bookmark className="w-4 h-4" />
-              <span>{isWatchlisted ? 'Watchlisted' : 'Add to Watchlist'}</span>
-            </button>
+        {user ? (
+          <div className="bg-card border border-border-custom p-4 rounded-3xl shadow-sm flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={() => isWatchlisted ? removeFromWatchlist(media.id, 'tv') : addToWatchlist(media, 'tv')}
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                  isWatchlisted 
+                    ? 'bg-primary-custom text-white' 
+                    : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                <Bookmark className="w-4 h-4" />
+                <span>{isWatchlisted ? 'Watchlisted' : 'Add to Watchlist'}</span>
+              </button>
 
-            <button
-              onClick={() => toggleFavorite(media, 'tv')}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
-                isFav 
-                  ? 'bg-rose-500/10 text-rose-500 border border-rose-500/25' 
-                  : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
-              }`}
-            >
-              <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
-              <span>Favorite Show</span>
-            </button>
+              <button
+                onClick={() => toggleFavorite(media, 'tv')}
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                  isFav 
+                    ? 'bg-rose-500/10 text-rose-500 border border-rose-500/25' 
+                    : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
+                <span>Favorite Show</span>
+              </button>
 
-            {/* List Selector dropdown */}
-            <ListSelector
-              media={media}
-              mediaType="tv"
-              watchlist={watchlist}
-              favorites={favorites}
-              customLists={customLists}
-              addToWatchlist={addToWatchlist}
-              removeFromWatchlist={removeFromWatchlist}
-              toggleFavorite={toggleFavorite}
-              saveCustomList={saveCustomList}
-            />
+              {/* List Selector dropdown */}
+              <ListSelector
+                media={media}
+                mediaType="tv"
+                watchlist={watchlist}
+                favorites={favorites}
+                customLists={customLists}
+                addToWatchlist={addToWatchlist}
+                removeFromWatchlist={removeFromWatchlist}
+                toggleFavorite={toggleFavorite}
+                saveCustomList={saveCustomList}
+              />
 
-            <button
-              onClick={() => {
-                setUserRating(getItemRating(media.id, 'tv'));
-                setUserNote(getItemNote(media.id, 'tv'));
-                setShowEditor(true);
-              }}
-              className="px-4 py-2.5 bg-background border border-border-custom hover:border-primary-custom text-muted-custom hover:text-foreground rounded-xl font-bold text-xs flex items-center gap-1.5 transition"
-            >
-              <PenTool className="w-4 h-4 text-primary-custom" />
-              <span>Personal Rating & Notes</span>
-            </button>
+              <button
+                onClick={() => {
+                  setUserRating(getItemRating(media.id, 'tv'));
+                  setUserNote(getItemNote(media.id, 'tv'));
+                  setShowEditor(true);
+                }}
+                className="px-4 py-2.5 bg-background border border-border-custom hover:border-primary-custom text-muted-custom hover:text-foreground rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <PenTool className="w-4 h-4 text-primary-custom" />
+                <span>Personal Rating & Notes</span>
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-card border border-border-custom p-5 rounded-3xl shadow-sm flex flex-col md:flex-row gap-5 justify-between items-start md:items-center">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs">
+              <span className="bg-primary-custom/10 text-primary-custom font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                <span>Read-Only Guest Mode</span>
+              </span>
+              {isWatchlisted && (
+                <span className="bg-slate-800/20 text-foreground border border-border-custom font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Bookmark className="w-3.5 h-3.5 text-primary-custom fill-current" />
+                  <span>On Administrator's Watchlist</span>
+                </span>
+              )}
+              {isFav && (
+                <span className="bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Heart className="w-3.5 h-3.5 fill-current" />
+                  <span>Administrator's Favorite</span>
+                </span>
+              )}
+            </div>
+
+            {(userRating > 0 || userNote) && (
+              <div className="bg-background border border-border-custom p-4 rounded-2xl w-full md:max-w-md space-y-2 shrink-0">
+                <div className="flex justify-between items-center pb-2 border-b border-border-custom/50">
+                  <span className="text-[10px] font-extrabold text-muted-custom uppercase tracking-wider">Administrator Review</span>
+                  {userRating > 0 && <span className="text-amber-500 text-xs font-bold">★ {userRating} / 10</span>}
+                </div>
+                {userNote && <p className="text-xs text-foreground italic whitespace-pre-wrap">"{userNote}"</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Content Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -883,28 +949,35 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
                     </div>
 
                     <div className="flex items-center justify-between pt-2">
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          // Toggle watched episode progress in Firestore
-                          await toggleEpisodeWatched(
-                            currentView.showId, 
-                            season.season_number, 
-                            ep.episode_number, 
-                            currentView.showName, 
-                            null, 
-                            totalEps
-                          );
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition ${
-                          watched 
-                            ? 'bg-emerald-500/10 text-emerald-500' 
-                            : 'bg-background hover:bg-slate-800/15 text-muted-custom border border-border-custom'
-                        }`}
-                      >
-                        {watched ? <Check className="w-3.5 h-3.5" /> : null}
-                        <span>{watched ? 'Watched' : 'Mark Watched'}</span>
-                      </button>
+                      {user ? (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            // Toggle watched episode progress in Firestore
+                            await toggleEpisodeWatched(
+                              currentView.showId, 
+                              season.season_number, 
+                              ep.episode_number, 
+                              currentView.showName, 
+                              null, 
+                              totalEps
+                            );
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                            watched 
+                              ? 'bg-emerald-500/10 text-emerald-500' 
+                              : 'bg-background hover:bg-slate-800/15 text-muted-custom border border-border-custom'
+                          }`}
+                        >
+                          {watched ? <Check className="w-3.5 h-3.5" /> : null}
+                          <span>{watched ? 'Watched' : 'Mark Watched'}</span>
+                        </button>
+                      ) : watched ? (
+                        <span className="bg-emerald-500/10 text-emerald-500 px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          <span>Watched by Admin</span>
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -957,42 +1030,69 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
         </div>
 
         {/* Episode actions panel */}
-        <div className="bg-card border border-border-custom p-4 rounded-3xl shadow-sm flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={async () => {
-                await toggleEpisodeWatched(
-                  currentView.showId, 
-                  currentView.seasonNumber, 
-                  currentView.episodeNumber, 
-                  currentView.showName, 
-                  null, 
-                  10 // standard guess fallback
-                );
-              }}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
-                watched 
-                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                  : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
-              }`}
-            >
-              <Check className="w-4 h-4" />
-              <span>{watched ? 'Watched' : 'Mark Watched'}</span>
-            </button>
+        {user ? (
+          <div className="bg-card border border-border-custom p-4 rounded-3xl shadow-sm flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={async () => {
+                  await toggleEpisodeWatched(
+                    currentView.showId, 
+                    currentView.seasonNumber, 
+                    currentView.episodeNumber, 
+                    currentView.showName, 
+                    null, 
+                    10 // standard guess fallback
+                  );
+                }}
+                className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                  watched 
+                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                    : 'bg-background border border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                <Check className="w-4 h-4" />
+                <span>{watched ? 'Watched' : 'Mark Watched'}</span>
+              </button>
 
-            <button
-              onClick={() => {
-                setUserRating(getItemRating(epKey, 'episode'));
-                setUserNote(getItemNote(epKey, 'episode'));
-                setShowEditor(true);
-              }}
-              className="px-4 py-2.5 bg-background border border-border-custom hover:border-primary-custom text-muted-custom hover:text-foreground rounded-xl font-bold text-xs flex items-center gap-1.5 transition"
-            >
-              <PenTool className="w-4 h-4 text-primary-custom" />
-              <span>Personal Rating & Notes</span>
-            </button>
+              <button
+                onClick={() => {
+                  setUserRating(getItemRating(epKey, 'episode'));
+                  setUserNote(getItemNote(epKey, 'episode'));
+                  setShowEditor(true);
+                }}
+                className="px-4 py-2.5 bg-background border border-border-custom hover:border-primary-custom text-muted-custom hover:text-foreground rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <PenTool className="w-4 h-4 text-primary-custom" />
+                <span>Personal Rating & Notes</span>
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-card border border-border-custom p-5 rounded-3xl shadow-sm flex flex-col md:flex-row gap-5 justify-between items-start md:items-center">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs">
+              <span className="bg-primary-custom/10 text-primary-custom font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                <span>Read-Only Guest Mode</span>
+              </span>
+              {watched && (
+                <span className="bg-emerald-500/10 text-emerald-500 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Watched by Admin</span>
+                </span>
+              )}
+            </div>
+
+            {(userRating > 0 || userNote) && (
+              <div className="bg-background border border-border-custom p-4 rounded-2xl w-full md:max-w-md space-y-2 shrink-0">
+                <div className="flex justify-between items-center pb-2 border-b border-border-custom/50">
+                  <span className="text-[10px] font-extrabold text-muted-custom uppercase tracking-wider">Administrator Review</span>
+                  {userRating > 0 && <span className="text-amber-500 text-xs font-bold">★ {userRating} / 10</span>}
+                </div>
+                {userNote && <p className="text-xs text-foreground italic whitespace-pre-wrap">"{userNote}"</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Grid description detail columns */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

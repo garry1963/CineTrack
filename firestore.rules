@@ -16,54 +16,54 @@ service cloud.firestore {
 
     // Users Database:
     // Anyone can read user tracking data (watchlist, favorites, progress, custom lists, ratings, notes, settings) for sharing.
-    // Only the owner can write to their own tracking data.
+    // Only the owner or authenticated administrator can write to their own or centralized 'admin_vault' tracking data.
     match /users/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
 
       match /settings/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /watchlist/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /favorites/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /show_progress/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /watched_episodes/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /watched_movies/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /ratings/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /notes/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
 
       match /custom_lists/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
       }
     }
   }

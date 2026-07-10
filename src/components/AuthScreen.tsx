@@ -2,16 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Film, Sparkles, Shield, ChevronRight, LogIn, AlertCircle, ExternalLink, Mail, Lock, UserPlus } from 'lucide-react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../firebase';
+import { transformPassword } from '../lib/utils';
 
 interface AuthScreenProps {
   onSuccess: () => void;
 }
 
 export default function AuthScreen({ onSuccess }: AuthScreenProps) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInIframe, setIsInIframe] = useState(false);
@@ -26,40 +25,44 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
       setError('Please fill in all fields.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-    if (mode === 'signup' && password !== confirmPassword) {
-      setError('Passwords do not match.');
+    if (password.length < 4) {
+      setError('Password must be at least 4 characters.');
       return;
     }
 
     setLoading(true);
     setError(null);
 
+    const transformedPassword = transformPassword(password);
+
     try {
-      if (mode === 'signin') {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
+      await signInWithEmailAndPassword(auth, email, transformedPassword);
       onSuccess();
     } catch (err: any) {
       console.error(err);
-      let message = err.message || 'Authentication failed.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        message = 'Invalid email or password. Please try again.';
-      } else if (err.code === 'auth/email-already-in-use') {
-        message = 'This email is already in use. Please sign in instead.';
-      } else if (err.code === 'auth/invalid-email') {
-        message = 'Please enter a valid email address.';
-      } else if (err.code === 'auth/weak-password') {
-        message = 'The password is too weak. Please use at least 6 characters.';
-      } else if (err.code === 'auth/operation-not-allowed') {
-        message = 'Email/Password authentication is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.';
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+        // Since Firebase combines credentials error, try auto-signing up to bootstrap
+        try {
+          await createUserWithEmailAndPassword(auth, email, transformedPassword);
+          onSuccess();
+          return;
+        } catch (signUpErr: any) {
+          console.error("Auto sign-up error:", signUpErr);
+          if (signUpErr.code === 'auth/email-already-in-use') {
+            setError('Invalid email or password. Please try again.');
+          } else {
+            setError(signUpErr.message || 'Authentication failed.');
+          }
+        }
+      } else {
+        let message = err.message || 'Authentication failed.';
+        if (err.code === 'auth/invalid-email') {
+          message = 'Please enter a valid email address.';
+        } else if (err.code === 'auth/operation-not-allowed') {
+          message = 'Email/Password authentication is not enabled. Please enable it in the Firebase Console under Authentication > Sign-in method.';
+        }
+        setError(message);
       }
-      setError(message);
     } finally {
       setLoading(false);
     }
@@ -90,14 +93,14 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
         {/* Text Copy */}
         <div className="space-y-3" id="branding-texts">
           <div className="inline-flex items-center gap-1.5 bg-primary-custom/10 border border-primary-custom/20 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase text-primary-custom">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Secure Cloud Sync</span>
+            <Shield className="w-3.5 h-3.5" />
+            <span>Administrator Access</span>
           </div>
           <h1 className="font-display font-bold text-3xl tracking-tight text-white">
-            CineTrack
+            CineTrack Admin
           </h1>
-          <p className="text-neutral-400 text-sm leading-relaxed max-w-xs mx-auto">
-            A beautiful, secure space to discover, track, and manage your favorite movies and shows.
+          <p className="text-neutral-400 text-xs leading-relaxed max-w-xs mx-auto">
+            Default Admin credentials: <span className="font-semibold text-primary-custom">admin@domain.com</span> with password <span className="font-semibold text-primary-custom">ADMIN</span>.
           </p>
         </div>
 
@@ -123,7 +126,7 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
                   type="email"
                   required
                   disabled={isLoading}
-                  placeholder="name@domain.com"
+                  placeholder="admin@domain.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-900/60 border border-neutral-800/80 focus:border-primary-custom/60 text-sm placeholder:text-neutral-600 text-neutral-100 outline-none transition duration-200"
@@ -150,27 +153,6 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
               </div>
             </div>
 
-            {/* Confirm Password Field (Only during registration) */}
-            {mode === 'signup' && (
-              <div className="space-y-1.5 animate-fade-in" id="confirm-password-field-group">
-                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Confirm Password</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-neutral-500">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="password"
-                    required
-                    disabled={isLoading}
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-900/60 border border-neutral-800/80 focus:border-primary-custom/60 text-sm placeholder:text-neutral-600 text-neutral-100 outline-none transition duration-200"
-                  />
-                </div>
-              </div>
-            )}
-
             {/* Submit Button */}
             <button
               type="submit"
@@ -180,37 +162,15 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : mode === 'signin' ? (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  <span>Sign In</span>
-                  <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform ml-auto opacity-60" />
-                </>
               ) : (
                 <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Create Account</span>
+                  <LogIn className="w-4 h-4" />
+                  <span>Authenticate Admin</span>
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform ml-auto opacity-60" />
                 </>
               )}
             </button>
           </form>
-
-          {/* Mode Switcher */}
-          <div className="text-center" id="mode-switcher-container">
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => {
-                setMode(mode === 'signin' ? 'signup' : 'signin');
-                setError(null);
-              }}
-              className="text-xs text-neutral-400 hover:text-primary-custom hover:underline transition cursor-pointer"
-              id="toggle-mode-btn"
-            >
-              {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-            </button>
-          </div>
 
         </div>
 

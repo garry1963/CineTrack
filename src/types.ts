@@ -6,6 +6,7 @@ export type ViewState =
   | { type: 'calendar' }
   | { type: 'statistics' }
   | { type: 'profile' }
+  | { type: 'admin-login' }
   | { type: 'show-details'; showId: number }
   | { type: 'movie-details'; movieId: number }
   | { type: 'season-details'; showId: number; seasonNumber: number; showName: string }

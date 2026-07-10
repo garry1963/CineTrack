@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Search, Bookmark, Calendar, BarChart3, User, Menu, ChevronLeft, Film, LogOut, MoreHorizontal } from 'lucide-react';
+import { Home, Compass, Search, Bookmark, Calendar, BarChart3, User, Menu, ChevronLeft, Film, LogOut, MoreHorizontal, Shield } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface NavigationProps {
@@ -82,18 +82,33 @@ export function Sidebar({
       <div className="p-4 border-t border-border-custom">
         {!sidebarCollapsed && (
           <div className="mb-3 px-2">
-            <div className="text-xs text-muted-custom truncate">Logged in as</div>
-            <div className="text-sm font-semibold truncate text-foreground">{userEmail || 'Anonymous'}</div>
+            <div className="text-xs text-muted-custom truncate">
+              {userEmail ? 'Logged in as Admin' : 'Browsing Mode'}
+            </div>
+            <div className="text-sm font-semibold truncate text-foreground">
+              {userEmail || 'Guest (Read-Only)'}
+            </div>
           </div>
         )}
-        <button
-          onClick={onLogout}
-          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-xs text-red-500 hover:bg-red-500/10 transition-all duration-200`}
-          title="Log out"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          {!sidebarCollapsed && <span>Log Out</span>}
-        </button>
+        {userEmail ? (
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-xs text-red-500 hover:bg-red-500/10 transition-all duration-200 cursor-pointer"
+            title="Log out"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            {!sidebarCollapsed && <span>Log Out</span>}
+          </button>
+        ) : (
+          <button
+            onClick={() => onNavigate({ type: 'admin-login' })}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-xs text-primary-custom hover:bg-primary-custom/10 transition-all duration-200 cursor-pointer"
+            title="Admin Sign In"
+          >
+            <Shield className="w-4 h-4 shrink-0" />
+            {!sidebarCollapsed && <span>Admin Sign In</span>}
+          </button>
+        )}
       </div>
     </aside>
   );
@@ -236,16 +251,29 @@ export function BottomNav({
 
         {/* Account action section */}
         <div className="pt-6 border-t border-border-custom mt-6 flex flex-col gap-3">
-          <button
-            onClick={() => {
-              setMoreOpen(false);
-              onLogout();
-            }}
-            className="w-full py-3.5 bg-red-500/10 hover:bg-red-500/15 border border-red-500/20 text-red-500 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
-          >
-            <LogOut className="w-4 h-4 shrink-0" />
-            <span>Sign Out from CineTrack</span>
-          </button>
+          {userEmail ? (
+            <button
+              onClick={() => {
+                setMoreOpen(false);
+                onLogout();
+              }}
+              className="w-full py-3.5 bg-red-500/10 hover:bg-red-500/15 border border-red-500/20 text-red-500 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 shrink-0" />
+              <span>Sign Out Admin</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setMoreOpen(false);
+                onNavigate({ type: 'admin-login' });
+              }}
+              className="w-full py-3.5 bg-primary-custom/10 hover:bg-primary-custom/15 border border-primary-custom/20 text-primary-custom rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <Shield className="w-4 h-4 shrink-0" />
+              <span>Admin Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </>

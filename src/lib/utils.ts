@@ -45,3 +45,10 @@ export function getEpisodeCode(season: number, episode: number): string {
   const e = episode < 10 ? `0${episode}` : episode;
   return `S${s}E${e}`;
 }
+
+export function transformPassword(rawPass: string): string {
+  if (rawPass.length < 6) {
+    return `${rawPass}_cinetrack_secure`;
+  }
+  return rawPass;
+}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { tmdb } from '../services/tmdb';
 import { TMDBMedia, ViewState } from '../types';
-import { getPosterUrl, getBackdropUrl, formatDate } from '../lib/utils';
+import { getPosterUrl, getBackdropUrl, formatDate, formatRuntime } from '../lib/utils';
 import { 
   Play, Star, Bookmark, Heart, Shuffle, ArrowRight, Tv, Film, 
   Eye, Sparkles, Sliders, ChevronUp, ChevronDown, Check, Plus, RotateCcw, X, List 
@@ -106,13 +106,42 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
         const mResults = trendingM.results || [];
         const tResults = trendingT.results || [];
         
-        setTrendingMovies(mResults.slice(0, 10));
+        const trendingMoviesSlice = mResults.slice(0, 10);
+        const upcomingMoviesSlice = (upcomingM.results || []).slice(0, 10);
+
+        // Fetch detailed movie info in parallel to get their runtimes
+        const [trendingMoviesWithRuntime, upcomingMoviesWithRuntime] = await Promise.all([
+          Promise.all(
+            trendingMoviesSlice.map(async (movie: TMDBMedia) => {
+              try {
+                const details = await tmdb.getMovieDetails(movie.id);
+                return { ...movie, runtime: details.runtime };
+              } catch (e) {
+                console.error(`Error fetching runtime for movie ${movie.id}:`, e);
+                return movie;
+              }
+            })
+          ),
+          Promise.all(
+            upcomingMoviesSlice.map(async (movie: TMDBMedia) => {
+              try {
+                const details = await tmdb.getMovieDetails(movie.id);
+                return { ...movie, runtime: details.runtime };
+              } catch (e) {
+                console.error(`Error fetching runtime for movie ${movie.id}:`, e);
+                return movie;
+              }
+            })
+          )
+        ]);
+
+        setTrendingMovies(trendingMoviesWithRuntime);
         setTrendingTV(tResults.slice(0, 10));
-        setUpcomingMovies((upcomingM.results || []).slice(0, 10));
+        setUpcomingMovies(upcomingMoviesWithRuntime);
         setRecentlyPremiered((premieredT.results || []).slice(0, 10));
 
         // Random recommendation from either movies or tv
-        const combined = [...mResults, ...tResults];
+        const combined = [...trendingMoviesWithRuntime, ...tResults];
         if (combined.length > 0) {
           const randomIndex = Math.floor(Math.random() * combined.length);
           setRandomRecommendation(combined[randomIndex]);
@@ -497,8 +526,9 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                         </div>
                       </div>
                       <div className="px-1 space-y-0.5">
-                        <h3 className="font-bold text-xs truncate text-foreground group-hover:text-primary-custom transition">
+                        <h3 className="font-bold text-xs truncate text-foreground group-hover:text-primary-custom transition" title={movie.title}>
                           {movie.title}
+                          {movie.runtime ? ` • ${formatRuntime(movie.runtime)}` : ''}
                         </h3>
                         <p className="text-[10px] text-muted-custom">
                           {formatDate(movie.release_date).split(',')[1]?.trim() || movie.release_date?.substring(0, 4) || 'N/A'}
@@ -575,7 +605,10 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                         loading="lazy"
                       />
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-xs text-foreground truncate">{movie.title}</h4>
+                        <h4 className="font-bold text-xs text-foreground truncate" title={movie.title}>
+                          {movie.title}
+                          {movie.runtime ? ` • ${formatRuntime(movie.runtime)}` : ''}
+                        </h4>
                         <p className="text-[10px] text-primary-custom font-medium mt-0.5">{formatDate(movie.release_date)}</p>
                       </div>
                       <div className="text-[10px] text-muted-custom bg-background px-2 py-1 rounded-lg">

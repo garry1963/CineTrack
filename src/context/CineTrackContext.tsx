@@ -38,6 +38,7 @@ export interface LocalUser {
 
 interface CineTrackContextType {
   user: User | LocalUser | null;
+  isAdmin: boolean;
   loading: boolean;
   watchlist: WatchlistItem[];
   favorites: FavoriteItem[];
@@ -101,19 +102,23 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const [notes, setNotes] = useState<UserNote[]>([]);
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [dbUserId, setDbUserId] = useState<string | null>('admin_vault');
 
-  const [dbUserId, setDbUserId] = useState<string | null>(null);
+  // Load local settings on boot as fallback
+  useEffect(() => {
+    const local = localStorage.getItem('cinetrack_local_settings');
+    if (local) {
+      try {
+        setSettings(JSON.parse(local));
+      } catch (e) {}
+    }
+  }, []);
   const [sharedUser, setSharedUser] = useState<{ uid: string; email: string; displayName: string } | null>(null);
 
-  // Sync dbUserId when logged in user changes
+  // Sync dbUserId: always 'admin_vault' in single-admin shared tracking model
   useEffect(() => {
-    if (user) {
-      setDbUserId(user.uid);
-      setSharedUser(null);
-    } else {
-      setDbUserId(null);
-      setSharedUser(null);
-    }
+    setDbUserId('admin_vault');
+    setSharedUser(null);
   }, [user]);
 
   // Update user profile mapping in Firestore for sharing lookup
@@ -202,11 +207,26 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const unsubSettings = onSnapshot(doc(db, 'users', userId, 'settings', 'preferences'), (docSnap) => {
       if (docSnap.exists()) {
         const loadedSettings = docSnap.data() as AppSettings;
-        setSettings({ ...defaultSettings, ...loadedSettings });
-        setRuntimeTmdbApiKey(loadedSettings.tmdbApiKey || null);
+        // If logged in as admin, sync fully. If guest, let them use local preferences if set.
+        const local = localStorage.getItem('cinetrack_local_settings');
+        if (!user && local) {
+          try {
+            setSettings(JSON.parse(local));
+          } catch (e) {}
+        } else {
+          setSettings({ ...defaultSettings, ...loadedSettings });
+          setRuntimeTmdbApiKey(loadedSettings.tmdbApiKey || null);
+        }
       } else {
-        setSettings(defaultSettings);
-        setRuntimeTmdbApiKey(null);
+        const local = localStorage.getItem('cinetrack_local_settings');
+        if (!user && local) {
+          try {
+            setSettings(JSON.parse(local));
+          } catch (e) {}
+        } else {
+          setSettings(defaultSettings);
+          setRuntimeTmdbApiKey(null);
+        }
       }
       setLoading(false);
     }, (err) => {
@@ -238,13 +258,13 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       posterPath: media.poster_path,
       addedAt: Date.now()
     };
-    await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
+    await setDoc(doc(db, 'users', 'admin_vault', 'watchlist', item.id), item);
   };
 
   const removeFromWatchlist = async (tmdbId: number, mediaType: 'movie' | 'tv') => {
     if (!user) return;
     const itemId = `${mediaType}_${tmdbId}`;
-    await deleteDoc(doc(db, 'users', user.uid, 'watchlist', itemId));
+    await deleteDoc(doc(db, 'users', 'admin_vault', 'watchlist', itemId));
   };
 
   const toggleFavorite = async (media: TMDBMedia, mediaType: 'movie' | 'tv') => {
@@ -252,7 +272,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const docId = `${mediaType}_${media.id}`;
     const isFav = favorites.some(f => f.id === docId);
     if (isFav) {
-      await deleteDoc(doc(db, 'users', user.uid, 'favorites', docId));
+      await deleteDoc(doc(db, 'users', 'admin_vault', 'favorites', docId));
     } else {
       const item: FavoriteItem = {
         id: docId,
@@ -262,7 +282,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         posterPath: media.poster_path,
         addedAt: Date.now()
       };
-      await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
+      await setDoc(doc(db, 'users', 'admin_vault', 'favorites', docId), item);
     }
   };
 
@@ -270,7 +290,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     const docId = `${movieId}`;
     if (status === 'Unwatched') {
-      await deleteDoc(doc(db, 'users', user.uid, 'watched_movies', docId));
+      await deleteDoc(doc(db, 'users', 'admin_vault', 'watched_movies', docId));
     } else {
       const item: WatchedMovie = {
         movieId,
@@ -280,7 +300,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         watchedAt: Date.now(),
         watchCount: status === 'Rewatch' ? 2 : 1
       };
-      await setDoc(doc(db, 'users', user.uid, 'watched_movies', docId), item);
+      await setDoc(doc(db, 'users', 'admin_vault', 'watched_movies', docId), item);
     }
   };
 
@@ -298,7 +318,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
     if (isWatched) {
       // Remove watched episode
-      await deleteDoc(doc(db, 'users', user.uid, 'watched_episodes', epId));
+      await deleteDoc(doc(db, 'users', 'admin_vault', 'watched_episodes', epId));
       
       // Re-calculate show progress count
       const updatedCount = Math.max(0, watchedEpisodes.filter(we => we.showId === showId).length - 1);
@@ -315,7 +335,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         totalEpisodesCount: totalEpisodes,
         updatedAt: Date.now()
       };
-      await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
+      await setDoc(doc(db, 'users', 'admin_vault', 'show_progress', `${showId}`), progress);
     } else {
       // Add watched episode
       const newEp: WatchedEpisode = {
@@ -325,7 +345,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         episodeNumber: epNum,
         watchedAt: Date.now()
       };
-      await setDoc(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
+      await setDoc(doc(db, 'users', 'admin_vault', 'watched_episodes', epId), newEp);
 
       // Re-calculate progress
       const updatedCount = watchedEpisodes.filter(we => we.showId === showId).length + 1;
@@ -341,7 +361,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         totalEpisodesCount: totalEpisodes,
         updatedAt: Date.now()
       };
-      await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
+      await setDoc(doc(db, 'users', 'admin_vault', 'show_progress', `${showId}`), progress);
     }
   };
 
@@ -355,14 +375,14 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       rating,
       updatedAt: Date.now()
     };
-    await setDoc(doc(db, 'users', user.uid, 'ratings', id), item);
+    await setDoc(doc(db, 'users', 'admin_vault', 'ratings', id), item);
   };
 
   const saveNote = async (targetId: number | string, type: 'movie' | 'tv' | 'episode', content: string) => {
     if (!user) return;
     const id = `${type}_${targetId}`;
     if (!content.trim()) {
-      await deleteDoc(doc(db, 'users', user.uid, 'notes', id));
+      await deleteDoc(doc(db, 'users', 'admin_vault', 'notes', id));
     } else {
       const item: UserNote = {
         id,
@@ -371,7 +391,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         content,
         updatedAt: Date.now()
       };
-      await setDoc(doc(db, 'users', user.uid, 'notes', id), item);
+      await setDoc(doc(db, 'users', 'admin_vault', 'notes', id), item);
     }
   };
 
@@ -387,16 +407,15 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       createdAt: list.createdAt || Date.now(),
       order: list.order !== undefined ? list.order : customLists.length
     };
-    await setDoc(doc(db, 'users', user.uid, 'custom_lists', listId), fullList);
+    await setDoc(doc(db, 'users', 'admin_vault', 'custom_lists', listId), fullList);
   };
 
   const deleteCustomList = async (listId: string) => {
     if (!user) return;
-    await deleteDoc(doc(db, 'users', user.uid, 'custom_lists', listId));
+    await deleteDoc(doc(db, 'users', 'admin_vault', 'custom_lists', listId));
   };
 
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
-    if (!user) return;
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     
@@ -404,7 +423,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       setRuntimeTmdbApiKey(newSettings.tmdbApiKey || null);
     }
 
-    await setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), updated);
+    if (user) {
+      await setDoc(doc(db, 'users', 'admin_vault', 'settings', 'preferences'), updated);
+    } else {
+      localStorage.setItem('cinetrack_local_settings', JSON.stringify(updated));
+    }
   };
 
   const loginAsGuest = async () => {
@@ -592,9 +615,12 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     return found ? found.content : '';
   };
 
+  const isAdmin = !!user;
+
   return (
     <CineTrackContext.Provider value={{
       user,
+      isAdmin,
       loading,
       watchlist,
       favorites,

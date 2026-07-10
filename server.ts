@@ -23,7 +23,8 @@ app.use(express.json());
 // API health endpoint
 app.get('/api/health', (req, res) => {
   const hasTmdbKey = (!!process.env.TMDB_API_KEY && process.env.TMDB_API_KEY !== 'YOUR_TMDB_API_KEY') ||
-                     (!!process.env.VITE_TMDB_API_KEY && process.env.VITE_TMDB_API_KEY !== 'YOUR_TMDB_API_KEY');
+                     (!!process.env.VITE_TMDB_API_KEY && process.env.VITE_TMDB_API_KEY !== 'YOUR_TMDB_API_KEY') ||
+                     (!!process.env.REACT_APP_TMDB_API_KEY && process.env.REACT_APP_TMDB_API_KEY !== 'YOUR_TMDB_API_KEY');
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
@@ -40,7 +41,7 @@ app.get('/api/tmdb', async (req, res) => {
   }
 
   // Get TMDB Key (with fallback to client-supplied key if the server doesn't have one configured)
-  let tmdbKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+  let tmdbKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || process.env.REACT_APP_TMDB_API_KEY;
   const clientKey = req.headers['x-tmdb-key'] || req.query.user_api_key;
   
   const isValidClientKey = clientKey && 
