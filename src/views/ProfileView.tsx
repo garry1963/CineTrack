@@ -363,17 +363,17 @@ export default function ProfileView() {
                   <input
                     type="text"
                     readOnly
-                    value={user && user.uid !== 'guest_user' ? `${window.location.origin}${window.location.pathname}?share=${user.uid}` : 'Sign in with a cloud account to generate link'}
+                    value={user ? `${window.location.origin}${window.location.pathname}?share=${user.uid}` : ''}
                     className="flex-1 bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-mono text-muted-custom outline-none select-all"
                   />
                   <button
                     onClick={() => {
-                      if (!user || user.uid === 'guest_user') return;
+                      if (!user) return;
                       navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?share=${user.uid}`);
                       setLinkCopied(true);
                       setTimeout(() => setLinkCopied(false), 2000);
                     }}
-                    disabled={!user || user.uid === 'guest_user'}
+                    disabled={!user}
                     className="px-4 py-2 bg-primary-custom hover:bg-primary-custom/90 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                   >
                     {linkCopied ? 'Copied!' : 'Copy Link'}
@@ -388,17 +388,17 @@ export default function ProfileView() {
                   <input
                     type="text"
                     readOnly
-                    value={user && user.uid !== 'guest_user' ? user.uid : 'Sign in with a cloud account to generate ID'}
+                    value={user ? user.uid : ''}
                     className="flex-1 bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-mono text-muted-custom outline-none select-all"
                   />
                   <button
                     onClick={() => {
-                      if (!user || user.uid === 'guest_user') return;
+                      if (!user) return;
                       navigator.clipboard.writeText(user.uid);
                       setUidCopied(true);
                       setTimeout(() => setUidCopied(false), 2000);
                     }}
-                    disabled={!user || user.uid === 'guest_user'}
+                    disabled={!user}
                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
                   >
                     {uidCopied ? 'Copied!' : 'Copy ID'}

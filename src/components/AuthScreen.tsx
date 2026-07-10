@@ -8,13 +8,11 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onSuccess }: AuthScreenProps) {
-  const { loginAsGuest } = useCineTrack();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingGuest, setLoadingGuest] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInIframe, setIsInIframe] = useState(false);
 
@@ -67,21 +65,7 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
     }
   };
 
-  const handleEnterVault = () => {
-    setLoadingGuest(true);
-    setError(null);
-    try {
-      loginAsGuest();
-      onSuccess();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to enter personal vault.');
-    } finally {
-      setLoadingGuest(false);
-    }
-  };
-
-  const isLoading = loading || loadingGuest;
+  const isLoading = loading;
 
   return (
     <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 md:p-6 text-neutral-100 font-sans relative overflow-hidden" id="auth-screen-root">
@@ -228,26 +212,6 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
             </button>
           </div>
 
-          <div className="relative flex py-2 items-center text-xs" id="auth-divider">
-            <div className="flex-grow border-t border-neutral-800/40"></div>
-            <span className="flex-shrink mx-4 text-neutral-600 font-medium">or</span>
-            <div className="flex-grow border-t border-neutral-800/40"></div>
-          </div>
-
-          {/* Local Guest Fallback Option */}
-          <button
-            type="button"
-            onClick={handleEnterVault}
-            disabled={isLoading}
-            className="w-full py-3.5 px-6 rounded-2xl bg-neutral-900/40 hover:bg-neutral-900/60 text-neutral-400 hover:text-white border border-neutral-800/40 font-medium text-sm transition-all duration-200 cursor-pointer text-center"
-            id="local-vault-btn"
-          >
-            {loadingGuest ? (
-              <div className="w-5 h-5 border-2 border-neutral-500 border-t-neutral-200 rounded-full animate-spin mx-auto" />
-            ) : (
-              <span>Continue Offline (Local Storage)</span>
-            )}
-          </button>
         </div>
 
         {/* Private Instance Note */}

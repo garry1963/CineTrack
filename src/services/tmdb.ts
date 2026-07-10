@@ -21,6 +21,12 @@ async function fetchDirectTMDB<T = any>(
   return response.json() as Promise<T>;
 }
 
+let activeTmdbApiKey: string | null = null;
+
+export function setRuntimeTmdbApiKey(key: string | null) {
+  activeTmdbApiKey = key;
+}
+
 export async function fetchFromTMDB<T = any>(
   path: string, 
   params: Record<string, any> = {}, 
@@ -39,7 +45,7 @@ export async function fetchFromTMDB<T = any>(
   }
 
   const envKey = (import.meta as any).env?.VITE_TMDB_API_KEY;
-  const rawKey = typeof window !== 'undefined' ? (localStorage.getItem('cine_tmdb_api_key') || (envKey && envKey !== 'YOUR_TMDB_API_KEY' ? envKey : null)) : null;
+  const rawKey = activeTmdbApiKey || (envKey && envKey !== 'YOUR_TMDB_API_KEY' ? envKey : null);
   const customKey = rawKey && rawKey !== 'undefined' && rawKey !== 'null' && rawKey !== 'YOUR_TMDB_API_KEY' && rawKey.trim() !== '' ? rawKey : null;
   
   const headers: Record<string, string> = {};
