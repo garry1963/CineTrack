@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { tmdb } from '../services/tmdb';
 import { TMDBMedia, ViewState } from '../types';
-import { getPosterUrl } from '../lib/utils';
+import { getPosterUrl, formatRuntime } from '../lib/utils';
 import { Star, Flame, Sparkles, Trophy, Calendar, Compass, Tv, Film } from 'lucide-react';
 
 interface DiscoverViewProps {
@@ -92,7 +92,21 @@ export default function DiscoverView({ onNavigate }: DiscoverViewProps) {
           }
         }
 
-        const newItems = response?.results || [];
+        let newItems = response?.results || [];
+        if (mediaType === 'movie') {
+          newItems = await Promise.all(
+            newItems.map(async (movie: TMDBMedia) => {
+              try {
+                const details = await tmdb.getMovieDetails(movie.id);
+                return { ...movie, runtime: details.runtime };
+              } catch (e) {
+                console.error(`Error fetching runtime for discover movie ${movie.id}:`, e);
+                return movie;
+              }
+            })
+          );
+        }
+
         if (page === 1) {
           setItems(newItems);
         } else {
@@ -280,8 +294,9 @@ export default function DiscoverView({ onNavigate }: DiscoverViewProps) {
                   </div>
                 </div>
                 <div className="px-1 space-y-0.5">
-                  <h3 className="font-bold text-xs truncate text-foreground group-hover:text-primary-custom transition">
+                  <h3 className="font-bold text-xs truncate text-foreground group-hover:text-primary-custom transition" title={item.title || item.name}>
                     {item.title || item.name}
+                    {mediaType === 'movie' && item.runtime ? ` • ${formatRuntime(item.runtime)}` : ''}
                   </h3>
                   <p className="text-[10px] text-muted-custom">
                     {item.release_date?.substring(0, 4) || item.first_air_date?.substring(0, 4) || 'N/A'}
