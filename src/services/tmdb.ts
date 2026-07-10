@@ -44,7 +44,7 @@ export async function fetchFromTMDB<T = any>(
     }
   }
 
-  const envKey = (import.meta as any).env?.VITE_TMDB_API_KEY;
+  const envKey = (import.meta as any).env?.VITE_TMDB_API_KEY || (import.meta as any).env?.TMDB_API_KEY;
   const rawKey = activeTmdbApiKey || (envKey && envKey !== 'YOUR_TMDB_API_KEY' ? envKey : null);
   const customKey = rawKey && rawKey !== 'undefined' && rawKey !== 'null' && rawKey !== 'YOUR_TMDB_API_KEY' && rawKey.trim() !== '' ? rawKey : null;
   
