@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { ViewState, CustomList } from '../types';
-import { getPosterUrl } from '../lib/utils';
-import { Bookmark, Star, Trash2, Plus, X, List, Film, Tv, Heart, ClipboardList, Check } from 'lucide-react';
+import { getPosterUrl, formatRuntime } from '../lib/utils';
+import { Bookmark, Star, Trash2, Plus, X, List, Film, Tv, Heart, ClipboardList, Check, Sparkles } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 
 interface WatchlistViewProps {
@@ -18,12 +18,79 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     removeFromWatchlist, 
     toggleFavorite,
     saveCustomList,
-    deleteCustomList
+    deleteCustomList,
+    addToWatchlist
   } = useCineTrack();
 
   const [activeTab, setActiveTab] = useState<'watchlist' | 'favorites' | 'custom_lists'>('watchlist');
   const [filterType, setFilterType] = useState<'all' | 'movie' | 'tv'>('all');
   const [sortOption, setSortOption] = useState<'added' | 'alpha'>('added');
+
+  // Dynamic runtime cache for items that don't have stored runtime
+  const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
+  const [bulkAddFeedback, setBulkAddFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    const listToCheck = activeTab === 'watchlist' ? watchlist : favorites;
+    const moviesNeedingRuntime = listToCheck.filter(
+      item => item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined
+    );
+
+    if (moviesNeedingRuntime.length === 0) return;
+
+    let isMounted = true;
+    async function fetchRuntimes() {
+      for (const item of moviesNeedingRuntime) {
+        if (!isMounted) break;
+        try {
+          const details = await tmdb.getMovieDetails(item.tmdbId);
+          if (details && details.runtime) {
+            setRuntimesCache(prev => ({
+              ...prev,
+              [item.tmdbId]: details.runtime || 0
+            }));
+          }
+        } catch (e) {
+          console.log(`Failed to fetch runtime for movie ${item.tmdbId}:`, e);
+        }
+      }
+    }
+
+    fetchRuntimes();
+    return () => {
+      isMounted = false;
+    };
+  }, [watchlist, favorites, activeTab, runtimesCache]);
+
+  const handleAddAllMoviesToWatchlist = async () => {
+    if (!currentList) return;
+    const moviesInList = currentList.items.filter(item => item.mediaType === 'movie');
+    if (moviesInList.length === 0) {
+      setBulkAddFeedback("No movies found in this list to add.");
+      setTimeout(() => setBulkAddFeedback(null), 3500);
+      return;
+    }
+
+    let addedCount = 0;
+    for (const item of moviesInList) {
+      const alreadyInWatchlist = watchlist.some(
+        w => w.tmdbId === item.tmdbId && w.mediaType === 'movie'
+      );
+      if (!alreadyInWatchlist) {
+        await addToWatchlist({
+          id: item.tmdbId,
+          title: item.title,
+          poster_path: item.posterPath,
+          overview: '',
+          vote_average: 0,
+          vote_count: 0
+        } as any, 'movie');
+        addedCount++;
+      }
+    }
+    setBulkAddFeedback(`Successfully added ${addedCount} movie(s) to your Movie Watchlist!`);
+    setTimeout(() => setBulkAddFeedback(null), 4500);
+  };
 
   // Sync state from currentView prop
   useEffect(() => {
@@ -306,9 +373,16 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                     <h3 className="font-bold text-xs truncate text-foreground hover:text-primary-custom transition">
                       {item.title}
                     </h3>
-                    <p className="text-[10px] text-muted-custom">
-                      {item.mediaType === 'tv' ? 'TV Show' : 'Movie'}
-                    </p>
+                    <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                      <span className="text-muted-custom">
+                        {item.mediaType === 'tv' ? 'TV Show' : 'Movie'}
+                      </span>
+                      {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
+                        <span className="text-primary-custom font-semibold">
+                          {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -411,11 +485,30 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
             </button>
           </div>
 
-          {/* List Meta Header */}
-          <div className="space-y-2">
-            <h2 className="font-display font-extrabold text-2xl text-foreground">{currentList.name}</h2>
-            <p className="text-sm text-muted-custom leading-relaxed">{currentList.description || 'No description provided.'}</p>
+          {/* List Meta Header & Add All Action */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border-custom p-5 rounded-3xl">
+            <div className="space-y-1">
+              <h2 className="font-display font-extrabold text-2xl text-foreground">{currentList.name}</h2>
+              <p className="text-sm text-muted-custom leading-relaxed">{currentList.description || 'No description provided.'}</p>
+            </div>
+            {currentList.items.some(item => item.mediaType === 'movie') && (
+              <button
+                onClick={handleAddAllMoviesToWatchlist}
+                className="bg-primary-custom hover:bg-primary-custom/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition duration-200 flex items-center gap-1.5 shrink-0 self-start sm:self-center cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add all movies to Movie Watchlist</span>
+              </button>
+            )}
           </div>
+
+          {/* Feedback banner */}
+          {bulkAddFeedback && (
+            <div className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 p-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>{bulkAddFeedback}</span>
+            </div>
+          )}
 
           {/* Inline TMDB Adding Bar */}
           <div className="bg-card border border-border-custom p-4 rounded-2xl shadow-sm space-y-3 max-w-xl">
@@ -504,9 +597,16 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
 
-                  <div className="px-1">
+                  <div className="px-1 space-y-0.5">
                     <h3 className="font-bold text-xs truncate text-foreground">{item.title}</h3>
-                    <p className="text-[10px] text-muted-custom uppercase font-mono mt-0.5">{item.mediaType}</p>
+                    <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                      <span className="text-muted-custom uppercase font-mono">{item.mediaType}</span>
+                      {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
+                        <span className="text-primary-custom font-semibold">
+                          {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))}

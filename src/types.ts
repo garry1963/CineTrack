@@ -143,6 +143,7 @@ export interface WatchlistItem {
   title: string;
   posterPath: string | null;
   addedAt: number;
+  runtime?: number;
 }
 
 export interface FavoriteItem {
@@ -152,6 +153,7 @@ export interface FavoriteItem {
   title: string;
   posterPath: string | null;
   addedAt: number;
+  runtime?: number;
 }
 
 export type TVShowStatus = 'Current' | 'Completed' | 'Dropped' | 'Paused' | 'Plan to Watch' | 'Rewatching';

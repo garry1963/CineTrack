@@ -310,7 +310,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       mediaType,
       title: media.title || media.name || '',
       posterPath: media.poster_path,
-      addedAt: Date.now()
+      addedAt: Date.now(),
+      runtime: media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : undefined)
     };
 
     try {
@@ -344,7 +345,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           mediaType,
           title: media.title || media.name || '',
           posterPath: media.poster_path,
-          addedAt: Date.now()
+          addedAt: Date.now(),
+          runtime: media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : undefined)
         };
         await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
       }
