@@ -57,14 +57,14 @@ function ListSelector({
   };
 
   const isItemInCustomList = (list: CustomList) => {
-    return list.items.some(item => item.tmdbId === media.id);
+    return list.items.some(item => item.tmdbId === media.id && item.mediaType === mediaType);
   };
 
   const handleToggleCustomList = async (list: CustomList) => {
     const isInList = isItemInCustomList(list);
     let updatedItems;
     if (isInList) {
-      updatedItems = list.items.filter(item => item.tmdbId !== media.id);
+      updatedItems = list.items.filter(item => !(item.tmdbId === media.id && item.mediaType === mediaType));
     } else {
       updatedItems = [
         ...list.items,

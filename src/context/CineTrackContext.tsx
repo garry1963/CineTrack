@@ -309,10 +309,14 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       tmdbId: media.id,
       mediaType,
       title: media.title || media.name || '',
-      posterPath: media.poster_path,
-      addedAt: Date.now(),
-      runtime: media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : undefined)
+      posterPath: media.poster_path || null,
+      addedAt: Date.now()
     };
+
+    const runtimeVal = media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : null);
+    if (runtimeVal !== null && runtimeVal !== undefined) {
+      item.runtime = runtimeVal;
+    }
 
     try {
       await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
@@ -344,10 +348,15 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           tmdbId: media.id,
           mediaType,
           title: media.title || media.name || '',
-          posterPath: media.poster_path,
-          addedAt: Date.now(),
-          runtime: media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : undefined)
+          posterPath: media.poster_path || null,
+          addedAt: Date.now()
         };
+
+        const runtimeVal = media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : null);
+        if (runtimeVal !== null && runtimeVal !== undefined) {
+          item.runtime = runtimeVal;
+        }
+
         await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
       }
     } catch (err) {

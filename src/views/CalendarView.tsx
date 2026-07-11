@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { tmdb } from '../services/tmdb';
 import { ViewState } from '../types';
 import { getPosterUrl, formatDate, getEpisodeCode } from '../lib/utils';
-import { Calendar, Tv, Bell, Clock } from 'lucide-react';
+import { Calendar, Tv, Bell, Clock, X, Check, Loader2 } from 'lucide-react';
 import { useCineTrack } from '../context/CineTrackContext';
 
 interface TVShowScheduleItem {
@@ -30,9 +30,53 @@ interface TVShowScheduleItem {
 }
 
 export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewState) => void }) {
-  const { watchlist } = useCineTrack();
+  const { watchlist, isEpisodeWatched, toggleEpisodeWatched, isViewingShared } = useCineTrack();
   const [scheduleList, setScheduleList] = useState<TVShowScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // States for Episode Release Dates Modal
+  const [selectedShowForEpisodes, setSelectedShowForEpisodes] = useState<TVShowScheduleItem | null>(null);
+  const [activeSeasonNumber, setActiveSeasonNumber] = useState<number>(1);
+  const [seasonEpisodes, setSeasonEpisodes] = useState<any[]>([]);
+  const [seasonLoading, setSeasonLoading] = useState(false);
+  const [seasonError, setSeasonError] = useState<string | null>(null);
+
+  const getEpisodeStatus = (airDateStr: string | null) => {
+    if (!airDateStr) return 'TBA';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const airDate = new Date(airDateStr);
+    airDate.setHours(0, 0, 0, 0);
+    
+    if (airDate.getTime() > today.getTime()) {
+      return 'Upcoming';
+    }
+    return 'Aired';
+  };
+
+  // Fetch season episodes when a show or season is selected
+  useEffect(() => {
+    if (!selectedShowForEpisodes) {
+      setSeasonEpisodes([]);
+      return;
+    }
+
+    async function loadSeasonEpisodes() {
+      setSeasonLoading(true);
+      setSeasonError(null);
+      try {
+        const details = await tmdb.getSeasonDetails(selectedShowForEpisodes.tmdbId, activeSeasonNumber);
+        setSeasonEpisodes(details.episodes || []);
+      } catch (err) {
+        console.error('Error fetching season episodes:', err);
+        setSeasonError('Failed to load episodes for this season.');
+      } finally {
+        setSeasonLoading(false);
+      }
+    }
+
+    loadSeasonEpisodes();
+  }, [selectedShowForEpisodes, activeSeasonNumber]);
 
   const tvWatchlist = watchlist.filter(w => w.mediaType === 'tv');
 
@@ -242,6 +286,19 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                     <span>{show.numberOfSeasons || 0} Seasons</span>
                     <span>{show.numberOfEpisodes || 0} Episodes</span>
                   </div>
+
+                  {/* Show All Episode Release Dates button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedShowForEpisodes(show);
+                      setActiveSeasonNumber(show.numberOfSeasons || 1);
+                    }}
+                    className="w-full mt-2.5 py-1.5 px-3 bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600/80 text-slate-300 hover:text-white font-semibold text-[10px] rounded-xl transition duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-primary-custom" />
+                    <span>View Episode Release Dates</span>
+                  </button>
                 </div>
               </div>
             );
@@ -261,6 +318,182 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
           </p>
         </div>
       </div>
+
+      {/* Episode Release Dates Modal */}
+      {selectedShowForEpisodes && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+          onClick={() => setSelectedShowForEpisodes(null)}
+        >
+          <div 
+            className="bg-card border border-border-custom w-full max-w-xl rounded-3xl shadow-xl overflow-hidden relative flex flex-col my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-border-custom flex items-start justify-between gap-4">
+              <div className="flex gap-4">
+                <div className="w-14 h-20 rounded-xl overflow-hidden shrink-0 bg-slate-900 shadow">
+                  <img
+                    src={getPosterUrl(selectedShowForEpisodes.posterPath, 'w92')}
+                    alt={selectedShowForEpisodes.title}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-display font-extrabold text-base text-foreground leading-tight">
+                    {selectedShowForEpisodes.title}
+                  </h3>
+                  <p className="text-xs text-muted-custom">
+                    Episode Release Schedule
+                  </p>
+                  
+                  {/* Season Selector */}
+                  <div className="pt-1.5 flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-medium">Select Season:</span>
+                    <select
+                      value={activeSeasonNumber}
+                      onChange={(e) => setActiveSeasonNumber(Number(e.target.value))}
+                      className="bg-slate-800 border border-slate-700 text-foreground text-xs font-bold rounded-xl px-2.5 py-1.5 cursor-pointer focus:outline-none focus:border-primary-custom"
+                    >
+                      {Array.from({ length: selectedShowForEpisodes.numberOfSeasons || 1 }, (_, i) => i + 1).map((s) => (
+                        <option key={s} value={s}>
+                          Season {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedShowForEpisodes(null)}
+                className="text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-full transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body / Episodes List */}
+            <div className="p-5 max-h-[50vh] overflow-y-auto custom-scrollbar flex-1 min-h-[250px]">
+              {seasonLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                  <Loader2 className="w-8 h-8 text-primary-custom animate-spin" />
+                  <p className="text-xs text-muted-custom animate-pulse">Retrieving episode release dates...</p>
+                </div>
+              ) : seasonError ? (
+                <div className="text-center py-12 text-red-500 space-y-2">
+                  <p className="text-sm font-bold">{seasonError}</p>
+                  <button
+                    onClick={() => {
+                      // Trigger state change to reload
+                      const current = activeSeasonNumber;
+                      setActiveSeasonNumber(0);
+                      setTimeout(() => setActiveSeasonNumber(current), 50);
+                    }}
+                    className="text-xs text-primary-custom hover:underline font-bold"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              ) : seasonEpisodes.length === 0 ? (
+                <div className="text-center py-12 text-muted-custom text-xs">
+                  No episodes found for Season {activeSeasonNumber}.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {seasonEpisodes.map((ep) => {
+                    const status = getEpisodeStatus(ep.air_date);
+                    const watched = isEpisodeWatched(selectedShowForEpisodes.tmdbId, activeSeasonNumber, ep.episode_number);
+                    
+                    return (
+                      <div 
+                        key={ep.id}
+                        className="bg-slate-900/40 border border-slate-800/60 hover:border-slate-800 rounded-2xl p-3 flex items-start justify-between gap-4 transition group"
+                      >
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-extrabold text-primary-custom bg-primary-custom/10 px-1.5 py-0.5 rounded">
+                              {getEpisodeCode(activeSeasonNumber, ep.episode_number)}
+                            </span>
+                            <span className="text-xs font-bold text-foreground truncate" title={ep.name}>
+                              {ep.name || `Episode ${ep.episode_number}`}
+                            </span>
+                          </div>
+                          
+                          {ep.overview && (
+                            <p className="text-[10px] text-muted-custom line-clamp-2 leading-relaxed pt-0.5 pr-2 group-hover:line-clamp-none transition duration-200">
+                              {ep.overview}
+                            </p>
+                          )}
+                          
+                          <div className="flex items-center gap-3 pt-1 text-[10px]">
+                            <span className="text-slate-400 font-medium">
+                              Air Date: <strong className="text-slate-200">{formatDate(ep.air_date)}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Status badging and toggle */}
+                        <div className="flex flex-col items-end justify-between self-stretch shrink-0 min-h-[44px]">
+                          {/* Badges */}
+                          <div className="flex items-center gap-1.5">
+                            {watched && (
+                              <span className="text-[9px] font-extrabold bg-green-500/10 text-green-500 border border-green-500/20 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                                <Check className="w-3 h-3" />
+                                <span>Watched</span>
+                              </span>
+                            )}
+                            
+                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                              status === 'Upcoming' 
+                                ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
+                                : status === 'Aired'
+                                ? 'bg-slate-800 text-slate-400'
+                                : 'bg-yellow-600/10 text-yellow-500 border border-yellow-600/20'
+                            }`}>
+                              {status}
+                            </span>
+                          </div>
+
+                          {/* Quick watched toggle */}
+                          {!isViewingShared && (
+                            <button
+                              onClick={async () => {
+                                await toggleEpisodeWatched(
+                                  selectedShowForEpisodes.tmdbId,
+                                  activeSeasonNumber,
+                                  ep.episode_number,
+                                  selectedShowForEpisodes.title,
+                                  selectedShowForEpisodes.posterPath,
+                                  selectedShowForEpisodes.numberOfEpisodes || 0
+                                );
+                              }}
+                              className={`text-[9px] font-bold px-2 py-1 rounded-lg border transition duration-200 cursor-pointer ${
+                                watched
+                                  ? 'bg-slate-800 hover:bg-red-950/40 border-slate-700 hover:border-red-900/60 text-slate-300 hover:text-red-400'
+                                  : 'bg-primary-custom/10 hover:bg-primary-custom text-primary-custom hover:text-white border-primary-custom/20 hover:border-transparent'
+                              }`}
+                            >
+                              {watched ? 'Mark Unwatched' : 'Mark Watched'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-900/20 border-t border-border-custom text-center">
+              <p className="text-[10px] text-muted-custom">
+                Note: Episode details and release dates are sourced from TMDB and updated dynamically.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

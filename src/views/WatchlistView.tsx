@@ -92,6 +92,36 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     setTimeout(() => setBulkAddFeedback(null), 4500);
   };
 
+  const handleAddAllTVToWatchlist = async () => {
+    if (!currentList) return;
+    const tvInList = currentList.items.filter(item => item.mediaType === 'tv');
+    if (tvInList.length === 0) {
+      setBulkAddFeedback("No TV shows found in this list to add.");
+      setTimeout(() => setBulkAddFeedback(null), 3500);
+      return;
+    }
+
+    let addedCount = 0;
+    for (const item of tvInList) {
+      const alreadyInWatchlist = watchlist.some(
+        w => w.tmdbId === item.tmdbId && w.mediaType === 'tv'
+      );
+      if (!alreadyInWatchlist) {
+        await addToWatchlist({
+          id: item.tmdbId,
+          name: item.title,
+          poster_path: item.posterPath,
+          overview: '',
+          vote_average: 0,
+          vote_count: 0
+        } as any, 'tv');
+        addedCount++;
+      }
+    }
+    setBulkAddFeedback(`Successfully added ${addedCount} TV show(s) to your TV Show Watchlist!`);
+    setTimeout(() => setBulkAddFeedback(null), 4500);
+  };
+
   // Sync state from currentView prop
   useEffect(() => {
     if (currentView && currentView.type === 'watchlist') {
@@ -160,14 +190,15 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
   };
 
   const addItemToCustomList = async (list: CustomList, tmdbItem: any) => {
-    const alreadyExists = list.items.some(i => i.tmdbId === tmdbItem.id);
+    const determinedType = tmdbItem.media_type || (tmdbItem.first_air_date || tmdbItem.name ? 'tv' : 'movie');
+    const alreadyExists = list.items.some(i => i.tmdbId === tmdbItem.id && i.mediaType === determinedType);
     if (alreadyExists) return;
 
     const updatedItems = [
       ...list.items,
       {
         tmdbId: tmdbItem.id,
-        mediaType: tmdbItem.media_type || 'movie',
+        mediaType: determinedType,
         title: tmdbItem.title || tmdbItem.name || '',
         posterPath: tmdbItem.poster_path
       }
@@ -182,8 +213,8 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     setListSearchResults([]);
   };
 
-  const removeItemFromCustomList = async (list: CustomList, tmdbId: number) => {
-    const updatedItems = list.items.filter(i => i.tmdbId !== tmdbId);
+  const removeItemFromCustomList = async (list: CustomList, tmdbId: number, mediaType: 'movie' | 'tv') => {
+    const updatedItems = list.items.filter(i => !(i.tmdbId === tmdbId && i.mediaType === mediaType));
     await saveCustomList({
       ...list,
       items: updatedItems
@@ -491,15 +522,26 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
               <h2 className="font-display font-extrabold text-2xl text-foreground">{currentList.name}</h2>
               <p className="text-sm text-muted-custom leading-relaxed">{currentList.description || 'No description provided.'}</p>
             </div>
-            {currentList.items.some(item => item.mediaType === 'movie') && (
-              <button
-                onClick={handleAddAllMoviesToWatchlist}
-                className="bg-primary-custom hover:bg-primary-custom/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition duration-200 flex items-center gap-1.5 shrink-0 self-start sm:self-center cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add all movies to Movie Watchlist</span>
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
+              {currentList.items.some(item => item.mediaType === 'movie') && (
+                <button
+                  onClick={handleAddAllMoviesToWatchlist}
+                  className="bg-primary-custom hover:bg-primary-custom/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition duration-200 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add all movies to Movie Watchlist</span>
+                </button>
+              )}
+              {currentList.items.some(item => item.mediaType === 'tv') && (
+                <button
+                  onClick={handleAddAllTVToWatchlist}
+                  className="bg-blue-600 hover:bg-blue-600/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition duration-200 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add all TV shows to TV Watchlist</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Feedback banner */}
@@ -527,7 +569,8 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
               {listSearchResults.length > 0 && (
                 <div className="absolute top-full left-0 right-0 bg-card border border-border-custom rounded-xl mt-1.5 shadow-lg overflow-hidden z-20 divide-y divide-border-custom">
                   {listSearchResults.map((sr) => {
-                    const isAlreadyIn = currentList.items.some(i => i.tmdbId === sr.id);
+                    const determinedType = sr.media_type || (sr.first_air_date || sr.name ? 'tv' : 'movie');
+                    const isAlreadyIn = currentList.items.some(i => i.tmdbId === sr.id && i.mediaType === determinedType);
                     return (
                       <div
                         key={sr.id}
@@ -590,7 +633,7 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                   </div>
 
                   <button
-                    onClick={() => removeItemFromCustomList(currentList, item.tmdbId)}
+                    onClick={() => removeItemFromCustomList(currentList, item.tmdbId, item.mediaType)}
                     className="absolute top-2.5 right-2.5 bg-red-600/95 text-white p-1.5 rounded-full hover:bg-red-500 shadow transition opacity-0 group-hover:opacity-100"
                     title="Remove from list"
                   >
