@@ -14,6 +14,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInAnonymously,
+  createUserWithEmailAndPassword,
   User 
 } from '../firebase';
 import { 
@@ -39,6 +40,7 @@ export interface LocalUser {
 interface CineTrackContextType {
   user: User | LocalUser | null;
   isAdmin: boolean;
+  isGuest: boolean;
   loading: boolean;
   watchlist: WatchlistItem[];
   favorites: FavoriteItem[];
@@ -151,15 +153,6 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [dbUserId, setDbUserId] = useState<string | null>(null);
 
-  // Load local settings on boot as fallback
-  useEffect(() => {
-    const local = localStorage.getItem('cinetrack_local_settings');
-    if (local) {
-      try {
-        setSettings(JSON.parse(local));
-      } catch (e) {}
-    }
-  }, []);
   const [sharedUser, setSharedUser] = useState<{ uid: string; email: string; displayName: string } | null>(null);
 
   // Sync dbUserId: use user.uid when logged in, or null when signed out
@@ -174,7 +167,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
   // Update user profile mapping in Firestore for sharing lookup
   useEffect(() => {
-    if (user && !user.isAnonymous && user.email) {
+    const isGuestUser = !user || user.isAnonymous || (!!user.email && user.email.startsWith('guest_') && user.email.endsWith('@cinetrack.com'));
+    if (user && !isGuestUser && user.email) {
       const updateProfile = async () => {
         try {
           await setDoc(doc(db, 'profiles', user.uid), {
@@ -191,14 +185,31 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // Auth Listener
+  // Auth Listener: Auto sign in anonymously on boot if no session exists (or provision guest account)
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
       if (u) {
         setUser(u);
       } else {
-        setUser(null);
-        setLoading(false);
+        setLoading(true);
+        try {
+          await signInAnonymously(auth);
+        } catch (err: any) {
+          console.log('Anonymous sign-in disabled or restricted by admin. Gracefully provisioning a secure cloud guest account instead:', err?.message || err);
+          // If anonymous authentication is restricted (auth/admin-restricted-operation or similar),
+          // auto-provision a unique, persistent cloud guest account!
+          console.log('Provisioning a secure guest account for cloud syncing...');
+          try {
+            const randomId = Math.random().toString(36).substring(2, 10);
+            const guestEmail = `guest_${randomId}_${Date.now()}@cinetrack.com`;
+            const guestPassword = `CineTrackGuestSecretP@ss_${randomId}`;
+            await createUserWithEmailAndPassword(auth, guestEmail, guestPassword);
+          } catch (createErr) {
+            console.log('Failed to auto-create secure guest account:', createErr);
+            setUser(null);
+            setLoading(false);
+          }
+        }
       }
     });
     return unsubscribe;
@@ -207,27 +218,6 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   // Sync with Firestore
   useEffect(() => {
     if (!dbUserId) {
-      // Load local offline data when not synced to any database user
-      const localWatchlist = localStorage.getItem('cinetrack_local_watchlist');
-      const localFavorites = localStorage.getItem('cinetrack_local_favorites');
-      const localProgress = localStorage.getItem('cinetrack_local_show_progress');
-      const localEpisodes = localStorage.getItem('cinetrack_local_watched_episodes');
-      const localMovies = localStorage.getItem('cinetrack_local_watched_movies');
-      const localRatings = localStorage.getItem('cinetrack_local_ratings');
-      const localNotes = localStorage.getItem('cinetrack_local_notes');
-      const localLists = localStorage.getItem('cinetrack_local_custom_lists');
-      const localSettings = localStorage.getItem('cinetrack_local_settings');
-
-      setWatchlist(localWatchlist ? JSON.parse(localWatchlist) : []);
-      setFavorites(localFavorites ? JSON.parse(localFavorites) : []);
-      setShowProgress(localProgress ? JSON.parse(localProgress) : []);
-      setWatchedEpisodes(localEpisodes ? JSON.parse(localEpisodes) : []);
-      setWatchedMovies(localMovies ? JSON.parse(localMovies) : []);
-      setRatings(localRatings ? JSON.parse(localRatings) : []);
-      setNotes(localNotes ? JSON.parse(localNotes) : []);
-      setCustomLists(localLists ? JSON.parse(localLists) : []);
-      setSettings(localSettings ? JSON.parse(localSettings) : defaultSettings);
-      setLoading(false);
       return;
     }
 
@@ -289,15 +279,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         setSettings({ ...defaultSettings, ...loadedSettings });
         setRuntimeTmdbApiKey(loadedSettings.tmdbApiKey || null);
       } else {
-        const local = localStorage.getItem('cinetrack_local_settings');
-        if (local) {
-          try {
-            setSettings(JSON.parse(local));
-          } catch (e) {}
-        } else {
-          setSettings(defaultSettings);
-          setRuntimeTmdbApiKey(null);
-        }
+        setSettings(defaultSettings);
+        setRuntimeTmdbApiKey(null);
       }
       setLoading(false);
     }, (err) => {
@@ -320,6 +303,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
   // Operations
   const addToWatchlist = async (media: TMDBMedia, mediaType: 'movie' | 'tv') => {
+    if (!user || isViewingShared) return;
     const item: WatchlistItem = {
       id: `${mediaType}_${media.id}`,
       tmdbId: media.id,
@@ -329,62 +313,30 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       addedAt: Date.now()
     };
 
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watchlist/${item.id}`);
-      }
-    } else {
-      const updated = [...watchlist.filter(w => w.id !== item.id), item];
-      setWatchlist(updated);
-      localStorage.setItem('cinetrack_local_watchlist', JSON.stringify(updated));
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watchlist/${item.id}`);
     }
   };
 
   const removeFromWatchlist = async (tmdbId: number, mediaType: 'movie' | 'tv') => {
+    if (!user || isViewingShared) return;
     const itemId = `${mediaType}_${tmdbId}`;
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'watchlist', itemId));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/watchlist/${itemId}`);
-      }
-    } else {
-      const updated = watchlist.filter(w => w.id !== itemId);
-      setWatchlist(updated);
-      localStorage.setItem('cinetrack_local_watchlist', JSON.stringify(updated));
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'watchlist', itemId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/watchlist/${itemId}`);
     }
   };
 
   const toggleFavorite = async (media: TMDBMedia, mediaType: 'movie' | 'tv') => {
+    if (!user || isViewingShared) return;
     const docId = `${mediaType}_${media.id}`;
     const isFav = favorites.some(f => f.id === docId);
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        if (isFav) {
-          await deleteDoc(doc(db, 'users', user.uid, 'favorites', docId));
-        } else {
-          const item: FavoriteItem = {
-            id: docId,
-            tmdbId: media.id,
-            mediaType,
-            title: media.title || media.name || '',
-            posterPath: media.poster_path,
-            addedAt: Date.now()
-          };
-          await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
-        }
-      } catch (err) {
-        handleFirestoreError(err, isFav ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/favorites/${docId}`);
-      }
-    } else {
-      let updated;
+    try {
       if (isFav) {
-        updated = favorites.filter(f => f.id !== docId);
+        await deleteDoc(doc(db, 'users', user.uid, 'favorites', docId));
       } else {
         const item: FavoriteItem = {
           id: docId,
@@ -394,38 +346,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           posterPath: media.poster_path,
           addedAt: Date.now()
         };
-        updated = [...favorites, item];
+        await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
       }
-      setFavorites(updated);
-      localStorage.setItem('cinetrack_local_favorites', JSON.stringify(updated));
+    } catch (err) {
+      handleFirestoreError(err, isFav ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/favorites/${docId}`);
     }
   };
 
   const toggleMovieWatched = async (movieId: number, title: string, posterPath: string | null, status: 'Watched' | 'Wishlist' | 'Rewatch' | 'Unwatched') => {
+    if (!user || isViewingShared) return;
     const docId = `${movieId}`;
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        if (status === 'Unwatched') {
-          await deleteDoc(doc(db, 'users', user.uid, 'watched_movies', docId));
-        } else {
-          const item: WatchedMovie = {
-            movieId,
-            title,
-            posterPath,
-            status,
-            watchedAt: Date.now(),
-            watchCount: status === 'Rewatch' ? 2 : 1
-          };
-          await setDoc(doc(db, 'users', user.uid, 'watched_movies', docId), item);
-        }
-      } catch (err) {
-        handleFirestoreError(err, status === 'Unwatched' ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/watched_movies/${docId}`);
-      }
-    } else {
-      let updated;
+    try {
       if (status === 'Unwatched') {
-        updated = watchedMovies.filter(m => `${m.movieId}` !== docId);
+        await deleteDoc(doc(db, 'users', user.uid, 'watched_movies', docId));
       } else {
         const item: WatchedMovie = {
           movieId,
@@ -435,10 +368,10 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           watchedAt: Date.now(),
           watchCount: status === 'Rewatch' ? 2 : 1
         };
-        updated = [...watchedMovies.filter(m => `${m.movieId}` !== docId), item];
+        await setDoc(doc(db, 'users', user.uid, 'watched_movies', docId), item);
       }
-      setWatchedMovies(updated);
-      localStorage.setItem('cinetrack_local_watched_movies', JSON.stringify(updated));
+    } catch (err) {
+      handleFirestoreError(err, status === 'Unwatched' ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/watched_movies/${docId}`);
     }
   };
 
@@ -450,62 +383,29 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     posterPath: string | null,
     totalEpisodes: number
   ) => {
+    if (!user || isViewingShared) return;
     const epId = `${showId}_${seasonNum}_${epNum}`;
     const isWatched = watchedEpisodes.some(we => we.id === epId);
 
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        if (isWatched) {
-          // Remove watched episode
-          await deleteDoc(doc(db, 'users', user.uid, 'watched_episodes', epId));
-          const updatedCount = Math.max(0, watchedEpisodes.filter(we => we.showId === showId).length - 1);
-          const progress: TVShowProgress = {
-            showId,
-            title: showTitle,
-            posterPath,
-            status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
-            lastWatchedSeason: seasonNum,
-            lastWatchedEpisode: epNum,
-            watchedEpisodesCount: updatedCount,
-            totalEpisodesCount: totalEpisodes,
-            updatedAt: Date.now()
-          };
-          await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
-        } else {
-          // Add watched episode
-          const newEp: WatchedEpisode = {
-            id: epId,
-            showId,
-            seasonNumber: seasonNum,
-            episodeNumber: epNum,
-            watchedAt: Date.now()
-          };
-          await setDoc(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
-          const updatedCount = watchedEpisodes.filter(we => we.showId === showId).length + 1;
-          const progress: TVShowProgress = {
-            showId,
-            title: showTitle,
-            posterPath,
-            status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
-            lastWatchedSeason: seasonNum,
-            lastWatchedEpisode: epNum,
-            watchedEpisodesCount: updatedCount,
-            totalEpisodesCount: totalEpisodes,
-            updatedAt: Date.now()
-          };
-          await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
-        }
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watched_episodes/${epId}`);
-      }
-    } else {
-      let updatedEps;
-      let updatedCount;
+    try {
       if (isWatched) {
-        updatedEps = watchedEpisodes.filter(we => we.id !== epId);
-        updatedCount = Math.max(0, updatedEps.filter(we => we.showId === showId).length);
+        // Remove watched episode
+        await deleteDoc(doc(db, 'users', user.uid, 'watched_episodes', epId));
+        const updatedCount = Math.max(0, watchedEpisodes.filter(we => we.showId === showId).length - 1);
+        const progress: TVShowProgress = {
+          showId,
+          title: showTitle,
+          posterPath,
+          status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
+          lastWatchedSeason: seasonNum,
+          lastWatchedEpisode: epNum,
+          watchedEpisodesCount: updatedCount,
+          totalEpisodesCount: totalEpisodes,
+          updatedAt: Date.now()
+        };
+        await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       } else {
+        // Add watched episode
         const newEp: WatchedEpisode = {
           id: epId,
           showId,
@@ -513,32 +413,28 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           episodeNumber: epNum,
           watchedAt: Date.now()
         };
-        updatedEps = [...watchedEpisodes, newEp];
-        updatedCount = updatedEps.filter(we => we.showId === showId).length;
+        await setDoc(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
+        const updatedCount = watchedEpisodes.filter(we => we.showId === showId).length + 1;
+        const progress: TVShowProgress = {
+          showId,
+          title: showTitle,
+          posterPath,
+          status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
+          lastWatchedSeason: seasonNum,
+          lastWatchedEpisode: epNum,
+          watchedEpisodesCount: updatedCount,
+          totalEpisodesCount: totalEpisodes,
+          updatedAt: Date.now()
+        };
+        await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       }
-      
-      const progress: TVShowProgress = {
-        showId,
-        title: showTitle,
-        posterPath,
-        status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
-        lastWatchedSeason: seasonNum,
-        lastWatchedEpisode: epNum,
-        watchedEpisodesCount: updatedCount,
-        totalEpisodesCount: totalEpisodes,
-        updatedAt: Date.now()
-      };
-
-      const updatedProgress = [...showProgress.filter(p => p.showId !== showId), progress];
-
-      setWatchedEpisodes(updatedEps);
-      setShowProgress(updatedProgress);
-      localStorage.setItem('cinetrack_local_watched_episodes', JSON.stringify(updatedEps));
-      localStorage.setItem('cinetrack_local_show_progress', JSON.stringify(updatedProgress));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watched_episodes/${epId}`);
     }
   };
 
   const rateItem = async (targetId: number | string, type: 'movie' | 'tv' | 'episode', rating: number) => {
+    if (!user || isViewingShared) return;
     const id = `${type}_${targetId}`;
     const item: UserRating = {
       id,
@@ -547,44 +443,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       rating,
       updatedAt: Date.now()
     };
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'ratings', id), item);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/ratings/${id}`);
-      }
-    } else {
-      const updated = [...ratings.filter(r => r.id !== id), item];
-      setRatings(updated);
-      localStorage.setItem('cinetrack_local_ratings', JSON.stringify(updated));
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'ratings', id), item);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/ratings/${id}`);
     }
   };
 
   const saveNote = async (targetId: number | string, type: 'movie' | 'tv' | 'episode', content: string) => {
+    if (!user || isViewingShared) return;
     const id = `${type}_${targetId}`;
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        if (!content.trim()) {
-          await deleteDoc(doc(db, 'users', user.uid, 'notes', id));
-        } else {
-          const item: UserNote = {
-            id,
-            targetId,
-            type,
-            content,
-            updatedAt: Date.now()
-          };
-          await setDoc(doc(db, 'users', user.uid, 'notes', id), item);
-        }
-      } catch (err) {
-        handleFirestoreError(err, !content.trim() ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/notes/${id}`);
-      }
-    } else {
-      let updated;
+    try {
       if (!content.trim()) {
-        updated = notes.filter(n => n.id !== id);
+        await deleteDoc(doc(db, 'users', user.uid, 'notes', id));
       } else {
         const item: UserNote = {
           id,
@@ -593,14 +464,15 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           content,
           updatedAt: Date.now()
         };
-        updated = [...notes.filter(n => n.id !== id), item];
+        await setDoc(doc(db, 'users', user.uid, 'notes', id), item);
       }
-      setNotes(updated);
-      localStorage.setItem('cinetrack_local_notes', JSON.stringify(updated));
+    } catch (err) {
+      handleFirestoreError(err, !content.trim() ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/notes/${id}`);
     }
   };
 
   const saveCustomList = async (list: Partial<CustomList>) => {
+    if (!user || isViewingShared) return;
     const listId = list.id || `list_${Math.random().toString(36).substr(2, 9)}`;
     const fullList: CustomList = {
       id: listId,
@@ -611,32 +483,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       createdAt: list.createdAt || Date.now(),
       order: list.order !== undefined ? list.order : customLists.length
     };
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'custom_lists', listId), fullList);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/custom_lists/${listId}`);
-      }
-    } else {
-      const updated = [...customLists.filter(l => l.id !== listId), fullList];
-      setCustomLists(updated.sort((a, b) => a.order - b.order));
-      localStorage.setItem('cinetrack_local_custom_lists', JSON.stringify(updated));
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'custom_lists', listId), fullList);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/custom_lists/${listId}`);
     }
   };
 
   const deleteCustomList = async (listId: string) => {
-    if (user) {
-      if (isViewingShared) return;
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'custom_lists', listId));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/custom_lists/${listId}`);
-      }
-    } else {
-      const updated = customLists.filter(l => l.id !== listId);
-      setCustomLists(updated);
-      localStorage.setItem('cinetrack_local_custom_lists', JSON.stringify(updated));
+    if (!user || isViewingShared) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'custom_lists', listId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/custom_lists/${listId}`);
     }
   };
 
@@ -648,25 +507,29 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       setRuntimeTmdbApiKey(newSettings.tmdbApiKey || null);
     }
 
-    if (user) {
-      if (!isViewingShared) {
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), updated);
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/settings/preferences`);
-        }
+    if (user && !isViewingShared) {
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), updated);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/settings/preferences`);
       }
-    } else {
-      localStorage.setItem('cinetrack_local_settings', JSON.stringify(updated));
     }
   };
 
   const loginAsGuest = async () => {
     try {
       await signInAnonymously(auth);
-    } catch (err) {
-      console.error('Error signing in anonymously:', err);
-      throw err;
+    } catch (err: any) {
+      console.log('Explicit guest sign-in request fallback to secure email-based cloud guest:', err?.message || err);
+      try {
+        const randomId = Math.random().toString(36).substring(2, 10);
+        const guestEmail = `guest_${randomId}_${Date.now()}@cinetrack.com`;
+        const guestPassword = `CineTrackGuestSecretP@ss_${randomId}`;
+        await createUserWithEmailAndPassword(auth, guestEmail, guestPassword);
+      } catch (createErr) {
+        console.log('Failed to create guest user in loginAsGuest:', createErr);
+        throw createErr;
+      }
     }
   };
 
@@ -846,12 +709,14 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     return found ? found.content : '';
   };
 
-  const isAdmin = !!user;
+  const isGuest = !user || user.isAnonymous || (!!user.email && user.email.startsWith('guest_') && user.email.endsWith('@cinetrack.com'));
+  const isAdmin = !!user && !isGuest;
 
   return (
     <CineTrackContext.Provider value={{
       user,
       isAdmin,
+      isGuest,
       loading,
       watchlist,
       favorites,

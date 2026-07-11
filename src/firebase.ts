@@ -12,7 +12,9 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
-  enableIndexedDbPersistence,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection,
   doc,
   setDoc,
@@ -43,22 +45,18 @@ const auth = getAuth(app);
 // Use custom firestore database ID from config if available, else use default
 let db: Firestore;
 try {
-  db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  }, firebaseConfig.firestoreDatabaseId || '(default)');
 } catch (error) {
-  db = getFirestore(app);
-}
-
-// Enable Offline Persistence for robust tracking
-try {
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('The current browser does not support all of the features required to enable persistence.');
-    }
-  });
-} catch (e) {
-  console.error('Error enabling Firestore offline persistence:', e);
+  console.warn('Failed to initialize Firestore with custom database and persistent cache, falling back to standard Firestore:', error);
+  try {
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+  } catch (fallbackError) {
+    db = getFirestore(app);
+  }
 }
 
 export { 

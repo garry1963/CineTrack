@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
-import { auth, signOut } from '../firebase';
+import { auth, signOut, db, doc, setDoc } from '../firebase';
 import { AppSettings, ThemeMode, ViewState } from '../types';
 import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
@@ -9,6 +9,7 @@ import { transformPassword } from '../lib/utils';
 export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewState) => void }) {
   const { 
     user, 
+    isGuest,
     settings, 
     updateSettings,
     watchlist,
@@ -188,11 +189,84 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
           return;
         }
 
-        // We can guide them or directly update. For simplicity, we import.
-        alert('Backup read successfully! Click "Trigger Import Sync" to import these datasets.');
+        if (!user) {
+          alert('No active cloud session found to import data.');
+          return;
+        }
+
+        setSyncing(true);
+        let count = 0;
+
+        // 1. Watchlist
+        if (Array.isArray(json.watchlist)) {
+          for (const item of json.watchlist) {
+            await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
+            count++;
+          }
+        }
+
+        // 2. Favorites
+        if (Array.isArray(json.favorites)) {
+          for (const item of json.favorites) {
+            await setDoc(doc(db, 'users', user.uid, 'favorites', item.id), item);
+            count++;
+          }
+        }
+
+        // 3. Show Progress
+        if (Array.isArray(json.showProgress)) {
+          for (const item of json.showProgress) {
+            await setDoc(doc(db, 'users', user.uid, 'show_progress', `${item.showId}`), item);
+            count++;
+          }
+        }
+
+        // 4. Watched Episodes
+        if (Array.isArray(json.watchedEpisodes)) {
+          for (const item of json.watchedEpisodes) {
+            await setDoc(doc(db, 'users', user.uid, 'watched_episodes', item.id), item);
+            count++;
+          }
+        }
+
+        // 5. Watched Movies
+        if (Array.isArray(json.watchedMovies)) {
+          for (const item of json.watchedMovies) {
+            await setDoc(doc(db, 'users', user.uid, 'watched_movies', `${item.movieId}`), item);
+            count++;
+          }
+        }
+
+        // 6. Ratings
+        if (Array.isArray(json.ratings)) {
+          for (const item of json.ratings) {
+            await setDoc(doc(db, 'users', user.uid, 'ratings', item.id), item);
+            count++;
+          }
+        }
+
+        // 7. Notes
+        if (Array.isArray(json.notes)) {
+          for (const item of json.notes) {
+            await setDoc(doc(db, 'users', user.uid, 'notes', item.id), item);
+            count++;
+          }
+        }
+
+        // 8. Custom Lists
+        if (Array.isArray(json.customLists)) {
+          for (const item of json.customLists) {
+            await setDoc(doc(db, 'users', user.uid, 'custom_lists', item.id), item);
+            count++;
+          }
+        }
+
+        alert(`Success! Successfully restored and synchronized ${count} tracking datasets into your Cloud Data Vault.`);
       } catch (err) {
-        console.error('Failed to parse backup:', err);
-        alert('Invalid JSON backup file.');
+        console.error('Failed to parse or restore backup:', err);
+        alert('Failed to parse backup JSON. Please check file format.');
+      } finally {
+        setSyncing(false);
       }
     };
     reader.readAsText(file);
@@ -204,6 +278,7 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
       setSyncing(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      alert('Your Cloud Data Vault is fully active and automatically synchronized in real-time!');
     }, 1200);
   };
 
@@ -224,19 +299,19 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
       <div className="bg-card border border-border-custom p-6 rounded-3xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
         <div className="flex items-center gap-4 min-w-0">
           <div className="w-14 h-14 rounded-2xl bg-primary-custom/10 text-primary-custom flex items-center justify-center shrink-0">
-            {user ? <Shield className="w-7 h-7" /> : <User className="w-7 h-7" />}
+            {user && !isGuest ? <Shield className="w-7 h-7" /> : <User className="w-7 h-7" />}
           </div>
           <div className="min-w-0">
             <h3 className="font-display font-bold text-base text-foreground truncate">
-              {user ? `Admin: ${user.email}` : 'Browsing as Guest'}
+              {user && !isGuest ? `Account: ${user.email}` : 'Browsing as Cloud Guest'}
             </h3>
             <p className="text-xs text-muted-custom font-semibold mt-0.5 truncate">
-              {user ? 'Administrator Account (Full Privileges)' : 'Read-Only Mode'}
+              {user && !isGuest ? 'Authenticated Cloud Account (Full Sync)' : 'Secure cloud guest tracking session'}
             </p>
           </div>
         </div>
 
-        {user ? (
+        {user && !isGuest ? (
           <button
             onClick={() => logout()}
             className="border border-red-500/20 text-red-500 hover:bg-red-500/10 px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 cursor-pointer"
@@ -422,7 +497,7 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
       </div>
 
       {/* Account Security & Password change */}
-      {user && (
+      {user && !isGuest && (
         <div className="bg-card border border-border-custom p-6 rounded-3xl space-y-6 shadow-sm" id="security-password-section">
           <div className="flex items-center gap-2 pb-3 border-b border-border-custom">
             <Lock className="w-5 h-5 text-primary-custom" />
