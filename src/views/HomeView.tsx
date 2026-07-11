@@ -376,52 +376,6 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
         </div>
       )}
 
-      {/* Hero Random Recommendation Backdrop Banner */}
-      {randomRecommendation && (
-        <div className="relative rounded-3xl overflow-hidden aspect-backdrop w-full max-h-[380px] bg-slate-900 group shadow-lg">
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent z-10" />
-          <img 
-            src={getBackdropUrl(randomRecommendation.backdrop_path)} 
-            alt={randomRecommendation.title || randomRecommendation.name}
-            className="absolute inset-0 w-full h-full object-cover object-top opacity-60 transition duration-700 group-hover:scale-102"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 z-20 space-y-3.5 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 bg-primary-custom/90 text-white text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full font-bold shadow-md">
-              <Shuffle className="w-3 h-3 animate-pulse" />
-              <span>Spotlight Suggestion</span>
-            </div>
-            <h1 className="font-display font-extrabold text-2xl md:text-4xl text-white tracking-tight drop-shadow">
-              {randomRecommendation.title || randomRecommendation.name}
-            </h1>
-            <p className="text-slate-300 text-xs md:text-sm line-clamp-2 leading-relaxed drop-shadow-sm">
-              {randomRecommendation.overview}
-            </p>
-            <div className="pt-2 flex items-center gap-3">
-              <button 
-                onClick={() => handleMediaClick(randomRecommendation)}
-                className="bg-white hover:bg-slate-100 text-slate-950 px-5 py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center gap-2 transition transform active:scale-95 shadow-md"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span>Explore Details</span>
-              </button>
-              <button 
-                onClick={() => {
-                  const combined = [...trendingMovies, ...trendingTV];
-                  const randomIdx = Math.floor(Math.random() * combined.length);
-                  setRandomRecommendation(combined[randomIdx]);
-                }}
-                className="bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 px-4 py-2.5 rounded-xl font-semibold text-xs md:text-sm flex items-center gap-2 transition"
-                title="Shuffle Spotlight"
-              >
-                <Shuffle className="w-4 h-4 text-muted-custom" />
-                <span className="hidden sm:inline">Shuffle</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Dynamic Configured Feed Rows */}
       {homeSections.map((sectionId) => {
         switch (sectionId) {
