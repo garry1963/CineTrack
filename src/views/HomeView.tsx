@@ -33,34 +33,67 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
 
   useEffect(() => {
-    if (!customLists || customLists.length === 0) return;
+    const moviesNeedingRuntime: { id: number }[] = [];
 
-    const moviesNeedingRuntime: any[] = [];
-    customLists.forEach(list => {
-      list.items.forEach(item => {
-        if (item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined) {
-          moviesNeedingRuntime.push(item);
+    // 1. Check custom list items
+    if (customLists && customLists.length > 0) {
+      customLists.forEach(list => {
+        list.items.forEach(item => {
+          if (item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined) {
+            if (!moviesNeedingRuntime.some(m => m.id === item.tmdbId)) {
+              moviesNeedingRuntime.push({ id: item.tmdbId });
+            }
+          }
+        });
+      });
+    }
+
+    // 2. Check trending movies shown on screen
+    if (trendingMovies && trendingMovies.length > 0) {
+      trendingMovies.forEach(movie => {
+        if (!movie.runtime && runtimesCache[movie.id] === undefined) {
+          if (!moviesNeedingRuntime.some(m => m.id === movie.id)) {
+            moviesNeedingRuntime.push({ id: movie.id });
+          }
         }
       });
-    });
+    }
+
+    // 3. Check upcoming movies shown on screen
+    if (upcomingMovies && upcomingMovies.length > 0) {
+      upcomingMovies.forEach(movie => {
+        if (!movie.runtime && runtimesCache[movie.id] === undefined) {
+          if (!moviesNeedingRuntime.some(m => m.id === movie.id)) {
+            moviesNeedingRuntime.push({ id: movie.id });
+          }
+        }
+      });
+    }
 
     if (moviesNeedingRuntime.length === 0) return;
 
     let isMounted = true;
     async function fetchRuntimes() {
-      for (const item of moviesNeedingRuntime) {
+      // Chunk concurrent requests to fetch runtimes extremely quickly without hitting rate limits
+      const chunkSize = 5;
+      for (let i = 0; i < moviesNeedingRuntime.length; i += chunkSize) {
         if (!isMounted) break;
-        try {
-          const details = await tmdb.getMovieDetails(item.tmdbId);
-          if (details && details.runtime) {
-            setRuntimesCache(prev => ({
-              ...prev,
-              [item.tmdbId]: details.runtime || 0
-            }));
-          }
-        } catch (e) {
-          console.log(`Failed to fetch runtime for movie ${item.tmdbId}:`, e);
-        }
+        const chunk = moviesNeedingRuntime.slice(i, i + chunkSize);
+        await Promise.all(
+          chunk.map(async (item) => {
+            try {
+              const details = await tmdb.getMovieDetails(item.id);
+              if (details && details.runtime && isMounted) {
+                setRuntimesCache(prev => ({
+                  ...prev,
+                  [item.id]: details.runtime || 0
+                }));
+              }
+            } catch (e) {
+              console.log(`Failed to fetch runtime for movie ${item.id}:`, e);
+            }
+          })
+        );
       }
     }
 
@@ -68,7 +101,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     return () => {
       isMounted = false;
     };
-  }, [customLists, runtimesCache]);
+  }, [customLists, trendingMovies, upcomingMovies, runtimesCache]);
 
   // Available rows list mapping
   const allAvailableSections = [
@@ -144,43 +177,19 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
 
         const mResults = trendingM.results || [];
         const tResults = trendingT.results || [];
+        const upcomingResults = upcomingM.results || [];
+        const premieredTResults = premieredT.results || [];
         
         const trendingMoviesSlice = mResults.slice(0, 10);
-        const upcomingMoviesSlice = (upcomingM.results || []).slice(0, 10);
+        const upcomingMoviesSlice = upcomingResults.slice(0, 10);
 
-        // Fetch detailed movie info in parallel to get their runtimes
-        const [trendingMoviesWithRuntime, upcomingMoviesWithRuntime] = await Promise.all([
-          Promise.all(
-            trendingMoviesSlice.map(async (movie: TMDBMedia) => {
-              try {
-                const details = await tmdb.getMovieDetails(movie.id);
-                return { ...movie, runtime: details.runtime };
-              } catch (e) {
-                console.error(`Error fetching runtime for movie ${movie.id}:`, e);
-                return movie;
-              }
-            })
-          ),
-          Promise.all(
-            upcomingMoviesSlice.map(async (movie: TMDBMedia) => {
-              try {
-                const details = await tmdb.getMovieDetails(movie.id);
-                return { ...movie, runtime: details.runtime };
-              } catch (e) {
-                console.error(`Error fetching runtime for movie ${movie.id}:`, e);
-                return movie;
-              }
-            })
-          )
-        ]);
-
-        setTrendingMovies(trendingMoviesWithRuntime);
+        setTrendingMovies(trendingMoviesSlice);
         setTrendingTV(tResults.slice(0, 10));
-        setUpcomingMovies(upcomingMoviesWithRuntime);
-        setRecentlyPremiered((premieredT.results || []).slice(0, 10));
+        setUpcomingMovies(upcomingMoviesSlice);
+        setRecentlyPremiered(premieredTResults.slice(0, 10));
 
         // Random recommendation from either movies or tv
-        const combined = [...trendingMoviesWithRuntime, ...tResults];
+        const combined = [...trendingMoviesSlice, ...tResults.slice(0, 10)];
         if (combined.length > 0) {
           const randomIndex = Math.floor(Math.random() * combined.length);
           setRandomRecommendation(combined[randomIndex]);
@@ -521,7 +530,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                       <div className="px-1 space-y-0.5">
                         <h3 className="font-bold text-xs truncate text-foreground group-hover:text-primary-custom transition" title={movie.title}>
                           {movie.title}
-                          {movie.runtime ? ` • ${formatRuntime(movie.runtime)}` : ''}
+                          {(movie.runtime || runtimesCache[movie.id]) ? ` • ${formatRuntime(movie.runtime || runtimesCache[movie.id])}` : ''}
                         </h3>
                         <p className="text-[10px] text-muted-custom">
                           {formatDate(movie.release_date).split(',')[1]?.trim() || movie.release_date?.substring(0, 4) || 'N/A'}
@@ -600,7 +609,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-xs text-foreground truncate" title={movie.title}>
                           {movie.title}
-                          {movie.runtime ? ` • ${formatRuntime(movie.runtime)}` : ''}
+                          {(movie.runtime || runtimesCache[movie.id]) ? ` • ${formatRuntime(movie.runtime || runtimesCache[movie.id])}` : ''}
                         </h4>
                         <p className="text-[10px] text-primary-custom font-medium mt-0.5">{formatDate(movie.release_date)}</p>
                       </div>

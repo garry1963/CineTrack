@@ -55,19 +55,26 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
 
     let isMounted = true;
     async function fetchRuntimes() {
-      for (const item of moviesNeedingRuntime) {
+      // Fetch in chunks of 5 concurrently to maximize throughput without rate-limiting
+      const chunkSize = 5;
+      for (let i = 0; i < moviesNeedingRuntime.length; i += chunkSize) {
         if (!isMounted) break;
-        try {
-          const details = await tmdb.getMovieDetails(item.tmdbId);
-          if (details && details.runtime) {
-            setRuntimesCache(prev => ({
-              ...prev,
-              [item.tmdbId]: details.runtime || 0
-            }));
-          }
-        } catch (e) {
-          console.log(`Failed to fetch runtime for movie ${item.tmdbId}:`, e);
-        }
+        const chunk = moviesNeedingRuntime.slice(i, i + chunkSize);
+        await Promise.all(
+          chunk.map(async (item) => {
+            try {
+              const details = await tmdb.getMovieDetails(item.tmdbId);
+              if (details && details.runtime && isMounted) {
+                setRuntimesCache(prev => ({
+                  ...prev,
+                  [item.tmdbId]: details.runtime || 0
+                }));
+              }
+            } catch (e) {
+              console.log(`Failed to fetch runtime for movie ${item.tmdbId}:`, e);
+            }
+          })
+        );
       }
     }
 
