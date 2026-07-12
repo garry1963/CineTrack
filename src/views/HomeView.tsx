@@ -30,6 +30,45 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   const [randomRecommendation, setRandomRecommendation] = useState<TMDBMedia | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCustomize, setShowCustomize] = useState(false);
+  const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    if (!customLists || customLists.length === 0) return;
+
+    const moviesNeedingRuntime: any[] = [];
+    customLists.forEach(list => {
+      list.items.forEach(item => {
+        if (item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined) {
+          moviesNeedingRuntime.push(item);
+        }
+      });
+    });
+
+    if (moviesNeedingRuntime.length === 0) return;
+
+    let isMounted = true;
+    async function fetchRuntimes() {
+      for (const item of moviesNeedingRuntime) {
+        if (!isMounted) break;
+        try {
+          const details = await tmdb.getMovieDetails(item.tmdbId);
+          if (details && details.runtime) {
+            setRuntimesCache(prev => ({
+              ...prev,
+              [item.tmdbId]: details.runtime || 0
+            }));
+          }
+        } catch (e) {
+          console.log(`Failed to fetch runtime for movie ${item.tmdbId}:`, e);
+        }
+      }
+    }
+
+    fetchRuntimes();
+    return () => {
+      isMounted = false;
+    };
+  }, [customLists, runtimesCache]);
 
   // Available rows list mapping
   const allAvailableSections = [
@@ -758,9 +797,20 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                             </div>
                           </div>
                           <div className="px-1 space-y-0.5">
-                            <h3 className="font-bold text-xs truncate text-indigo-400 group-hover:text-indigo-400 transition">
+                            <h3 className="font-bold text-xs truncate text-indigo-400 group-hover:text-indigo-400 transition" title={item.title}>
                               {item.title}
                             </h3>
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-custom">
+                              <span className="uppercase font-mono">{item.mediaType}</span>
+                              {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-primary-custom font-semibold">
+                                    {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
+                                  </span>
+                                </>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       ))}

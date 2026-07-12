@@ -25,13 +25,28 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
   const [activeTab, setActiveTab] = useState<'watchlist' | 'favorites' | 'custom_lists'>('watchlist');
   const [filterType, setFilterType] = useState<'all' | 'movie' | 'tv'>('all');
   const [sortOption, setSortOption] = useState<'added' | 'alpha'>('added');
+  const [activeListId, setActiveListId] = useState<string | null>(null);
+
+  const currentList = customLists.find(l => l.id === activeListId);
 
   // Dynamic runtime cache for items that don't have stored runtime
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
   const [bulkAddFeedback, setBulkAddFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    const listToCheck = activeTab === 'watchlist' ? watchlist : favorites;
+    let listToCheck: any[] = [];
+    if (activeTab === 'watchlist') {
+      listToCheck = watchlist;
+    } else if (activeTab === 'favorites') {
+      listToCheck = favorites;
+    } else if (activeTab === 'custom_lists' && currentList) {
+      listToCheck = currentList.items.map(item => ({
+        tmdbId: item.tmdbId,
+        mediaType: item.mediaType,
+        runtime: item.runtime
+      }));
+    }
+
     const moviesNeedingRuntime = listToCheck.filter(
       item => item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined
     );
@@ -60,7 +75,7 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     return () => {
       isMounted = false;
     };
-  }, [watchlist, favorites, activeTab, runtimesCache]);
+  }, [watchlist, favorites, activeTab, currentList, runtimesCache]);
 
   const handleAddAllMoviesToWatchlist = async () => {
     if (!currentList) return;
@@ -138,7 +153,6 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListDesc, setNewListDesc] = useState('');
-  const [activeListId, setActiveListId] = useState<string | null>(null);
 
   // Custom list item lookup search
   const [listSearchQuery, setListSearchQuery] = useState('');
@@ -194,13 +208,26 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     const alreadyExists = list.items.some(i => i.tmdbId === tmdbItem.id && i.mediaType === determinedType);
     if (alreadyExists) return;
 
+    let runtime: number | undefined = undefined;
+    if (determinedType === 'movie') {
+      try {
+        const details = await tmdb.getMovieDetails(tmdbItem.id);
+        if (details && details.runtime) {
+          runtime = details.runtime;
+        }
+      } catch (err) {
+        console.error('Failed to fetch movie runtime when adding to custom list:', err);
+      }
+    }
+
     const updatedItems = [
       ...list.items,
       {
         tmdbId: tmdbItem.id,
         mediaType: determinedType,
         title: tmdbItem.title || tmdbItem.name || '',
-        posterPath: tmdbItem.poster_path
+        posterPath: tmdbItem.poster_path,
+        runtime
       }
     ];
 
@@ -220,8 +247,6 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
       items: updatedItems
     });
   };
-
-  const currentList = customLists.find(l => l.id === activeListId);
 
   return (
     <div className="space-y-6 pb-16">

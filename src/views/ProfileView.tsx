@@ -115,19 +115,35 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
 
     try {
       const input = friendInput.trim();
+      let targetUid = input;
+
+      // Extract the share UID if they pasted a direct share URL
+      if (input.includes('share=')) {
+        try {
+          const urlIndex = input.indexOf('?');
+          const queryString = urlIndex !== -1 ? input.substring(urlIndex) : `?${input}`;
+          const urlParams = new URLSearchParams(queryString);
+          const shareParam = urlParams.get('share') || urlParams.get('shareUID');
+          if (shareParam) {
+            targetUid = shareParam;
+          }
+        } catch (e) {
+          console.error('Error parsing share URL, falling back:', e);
+        }
+      }
+
       let success = false;
-      
-      if (input.includes('@')) {
-        success = await loadSharedAccountByEmail(input);
+      if (targetUid.includes('@')) {
+        success = await loadSharedAccountByEmail(targetUid);
       } else {
-        success = await loadSharedAccountByUid(input);
+        success = await loadSharedAccountByUid(targetUid);
       }
 
       if (success) {
         setFriendSuccess(true);
         setFriendInput('');
       } else {
-        setFriendError('No profile matching that email or ID was found. Ensure your friend has signed in with a valid cloud tracking account.');
+        setFriendError('Could not connect to that shared library. Make sure the share link is valid and has not expired.');
       }
     } catch (err) {
       console.error(err);
@@ -587,7 +603,7 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
               <div>
                 <h4 className="text-xs font-bold text-foreground uppercase tracking-wider text-muted-custom">Share Your Tracking Database</h4>
                 <p className="text-[11px] text-muted-custom leading-relaxed mt-1">
-                  Give friends real-time access to view your watchlist, favorites, customs, ratings, progress, and movie notes.
+                  Give friends real-time read-only access to view your watchlist, favorites, themed lists, ratings, progress, and movie notes.
                 </p>
               </div>
 
@@ -614,29 +630,6 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
                     </button>
                   </div>
                 </div>
-
-                {/* Direct share UID */}
-                <div>
-                  <label className="text-[10px] font-bold text-muted-custom block mb-1">Your Share ID (UID)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={user.uid}
-                      className="flex-1 bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-mono text-muted-custom outline-none select-all"
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(user.uid);
-                        setUidCopied(true);
-                        setTimeout(() => setUidCopied(false), 2000);
-                      }}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
-                    >
-                      {uidCopied ? 'Copied!' : 'Copy ID'}
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -645,18 +638,18 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
               <div>
                 <h4 className="text-xs font-bold text-foreground uppercase tracking-wider text-muted-custom">Connect to a Friend's Library</h4>
                 <p className="text-[11px] text-muted-custom leading-relaxed mt-1">
-                  Enter your friend's account email address or direct Share ID below to view their tracking collections and lists in real-time.
+                  Paste your friend's direct Share Link below to view their tracking collections and themed lists in real-time.
                 </p>
               </div>
 
               <form onSubmit={handleLoadSharedFriend} className="space-y-3.5">
                 <div>
-                  <label className="text-[10px] font-bold text-muted-custom block mb-1">Friend's Email Address or Share ID</label>
+                  <label className="text-[10px] font-bold text-muted-custom block mb-1">Friend's Share Link</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       required
-                      placeholder="e.g. friend@example.com or user_uid_here..."
+                      placeholder="e.g. paste direct share link here..."
                       value={friendInput}
                       onChange={(e) => setFriendInput(e.target.value)}
                       className="flex-1 bg-background border border-border-custom px-3.5 py-2.5 rounded-xl text-xs text-foreground outline-none focus:border-primary-custom/50"
@@ -666,7 +659,7 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
                       disabled={loadingFriend}
                       className="px-4 py-2.5 bg-primary-custom hover:bg-primary-custom/90 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      {loadingFriend ? 'Searching...' : 'Connect'}
+                      {loadingFriend ? 'Connecting...' : 'Connect'}
                     </button>
                   </div>
                   {friendError && (

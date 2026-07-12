@@ -214,6 +214,7 @@ export interface CustomList {
     mediaType: 'movie' | 'tv';
     title: string;
     posterPath: string | null;
+    runtime?: number;
   }[];
   createdAt: number;
   order: number;
