@@ -27,7 +27,8 @@ import {
   UserNote, 
   CustomList, 
   AppSettings,
-  TMDBMedia
+  TMDBMedia,
+  ToastNotification
 } from '../types';
 import { setRuntimeTmdbApiKey } from '../services/tmdb';
 
@@ -51,6 +52,9 @@ interface CineTrackContextType {
   notes: UserNote[];
   customLists: CustomList[];
   settings: AppSettings;
+  notifications: ToastNotification[];
+  showNotification: (message: string, type?: 'success' | 'info' | 'error', title?: string, duration?: number) => void;
+  dismissNotification: (id: string) => void;
   
   // Share attributes
   sharedUser: { uid: string; email: string; displayName: string } | null;
@@ -152,6 +156,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [dbUserId, setDbUserId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<ToastNotification[]>([]);
+
+  const showNotification = (message: string, type: 'success' | 'info' | 'error' = 'success', title?: string, duration: number = 4000) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setNotifications((prev) => [...prev, { id, message, type, title, duration }]);
+    setTimeout(() => {
+      dismissNotification(id);
+    }, duration);
+  };
+
+  const dismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
 
   const [sharedUser, setSharedUser] = useState<{ uid: string; email: string; displayName: string } | null>(null);
 
@@ -320,6 +337,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
     try {
       await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
+      showNotification(`"${item.title}" has been successfully added to your Watchlist.`, 'success', 'Watchlist');
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watchlist/${item.id}`);
     }
@@ -328,8 +346,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const removeFromWatchlist = async (tmdbId: number, mediaType: 'movie' | 'tv') => {
     if (!user || isViewingShared) return;
     const itemId = `${mediaType}_${tmdbId}`;
+    const existingItem = watchlist.find(w => w.id === itemId);
+    const title = existingItem ? existingItem.title : (mediaType === 'movie' ? 'Movie' : 'TV show');
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'watchlist', itemId));
+      showNotification(`"${title}" has been successfully removed from your Watchlist.`, 'success', 'Watchlist');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/watchlist/${itemId}`);
     }
@@ -339,9 +360,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     if (!user || isViewingShared) return;
     const docId = `${mediaType}_${media.id}`;
     const isFav = favorites.some(f => f.id === docId);
+    const title = media.title || media.name || (mediaType === 'movie' ? 'Movie' : 'TV show');
     try {
       if (isFav) {
         await deleteDoc(doc(db, 'users', user.uid, 'favorites', docId));
+        showNotification(`"${title}" has been successfully removed from your Favorites.`, 'success', 'Favorites');
       } else {
         const item: FavoriteItem = {
           id: docId,
@@ -358,6 +381,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         }
 
         await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
+        showNotification(`"${title}" has been successfully added to your Favorites.`, 'success', 'Favorites');
       }
     } catch (err) {
       handleFirestoreError(err, isFav ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/favorites/${docId}`);
@@ -494,8 +518,40 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       createdAt: list.createdAt || Date.now(),
       order: list.order !== undefined ? list.order : customLists.length
     };
+
+    const existingList = customLists.find(l => l.id === listId);
+    let notificationText: string | null = null;
+    let notificationTitle: string | null = null;
+
+    if (existingList && list.items) {
+      const existingItems = existingList.items || [];
+      const incomingItems = list.items;
+      if (incomingItems.length > existingItems.length) {
+        const added = incomingItems.find(item => !existingItems.some(i => i.tmdbId === item.tmdbId && i.mediaType === item.mediaType));
+        if (added) {
+          notificationText = `"${added.title}" has been successfully added to "${fullList.name}".`;
+          notificationTitle = fullList.name;
+        }
+      } else if (incomingItems.length < existingItems.length) {
+        const removed = existingItems.find(item => !incomingItems.some(i => i.tmdbId === item.tmdbId && i.mediaType === item.mediaType));
+        if (removed) {
+          notificationText = `"${removed.title}" has been successfully removed from "${fullList.name}".`;
+          notificationTitle = fullList.name;
+        }
+      }
+    } else if (!existingList && list.items && list.items.length > 0) {
+      const added = list.items[0];
+      if (added) {
+        notificationText = `"${added.title}" has been successfully added to "${fullList.name}".`;
+        notificationTitle = fullList.name;
+      }
+    }
+
     try {
       await setDoc(doc(db, 'users', user.uid, 'custom_lists', listId), fullList);
+      if (notificationText && notificationTitle) {
+        showNotification(notificationText, 'success', notificationTitle);
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/custom_lists/${listId}`);
     }
@@ -738,6 +794,9 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       notes,
       customLists,
       settings,
+      notifications,
+      showNotification,
+      dismissNotification,
       
       sharedUser,
       isViewingShared,

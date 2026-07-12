@@ -13,6 +13,7 @@ import ProfileView from './views/ProfileView';
 import DetailsView from './views/DetailsView';
 import { auth } from './firebase';
 import { Film, User, AlertCircle, RefreshCw, Share2 } from 'lucide-react';
+import ToastContainer from './components/Toast';
 
 function Dashboard() {
   const { 
@@ -194,6 +195,9 @@ function Dashboard() {
         userEmail={user?.email || null}
         onLogout={handleLogout}
       />
+
+      {/* Global Toast Notification Overlay */}
+      <ToastContainer />
 
     </div>
   );

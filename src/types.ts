@@ -219,3 +219,11 @@ export interface CustomList {
   createdAt: number;
   order: number;
 }
+
+export interface ToastNotification {
+  id: string;
+  message: string;
+  type: 'success' | 'info' | 'error';
+  title?: string;
+  duration?: number;
+}
