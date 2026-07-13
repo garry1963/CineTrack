@@ -942,9 +942,16 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
                   />
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
-                      <h4 className="font-bold text-xs text-foreground truncate group-hover:text-primary-custom transition">
-                        {ep.episode_number}. {ep.name}
-                      </h4>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-bold text-xs text-foreground truncate group-hover:text-primary-custom transition">
+                          {ep.episode_number}. {ep.name}
+                        </h4>
+                        {ep.runtime ? (
+                          <span className="text-[10px] text-primary-custom font-semibold shrink-0 bg-primary-custom/10 px-1.5 py-0.5 rounded">
+                            {formatRuntime(ep.runtime)}
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="text-[10px] text-muted-custom font-medium mt-1">Air Date: {formatDate(ep.air_date)}</p>
                     </div>
 

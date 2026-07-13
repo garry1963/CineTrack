@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { ViewState, CustomList } from '../types';
 import { getPosterUrl, formatRuntime } from '../lib/utils';
@@ -32,6 +32,7 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
   // Dynamic runtime cache for items that don't have stored runtime
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
   const [bulkAddFeedback, setBulkAddFeedback] = useState<string | null>(null);
+  const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     let listToCheck: any[] = [];
@@ -48,10 +49,13 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     }
 
     const moviesNeedingRuntime = listToCheck.filter(
-      item => item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined
+      item => item.mediaType === 'movie' && item.runtime === undefined && !fetchedOrFetchingRef.current.has(item.tmdbId)
     );
 
     if (moviesNeedingRuntime.length === 0) return;
+
+    // Mark as fetching
+    moviesNeedingRuntime.forEach(item => fetchedOrFetchingRef.current.add(item.tmdbId));
 
     let isMounted = true;
     async function fetchRuntimes() {
@@ -64,14 +68,17 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
           chunk.map(async (item) => {
             try {
               const details = await tmdb.getMovieDetails(item.tmdbId);
-              if (details && details.runtime && isMounted) {
+              if (details && isMounted) {
+                const rt = details.runtime || 0;
                 setRuntimesCache(prev => ({
                   ...prev,
-                  [item.tmdbId]: details.runtime || 0
+                  [item.tmdbId]: rt
                 }));
               }
             } catch (e) {
               console.log(`Failed to fetch runtime for movie ${item.tmdbId}:`, e);
+              // Remove on failure to allow retry if needed
+              fetchedOrFetchingRef.current.delete(item.tmdbId);
             }
           })
         );
@@ -82,7 +89,7 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     return () => {
       isMounted = false;
     };
-  }, [watchlist, favorites, activeTab, currentList, runtimesCache]);
+  }, [watchlist, favorites, activeTab, currentList]);
 
   const handleAddAllMoviesToWatchlist = async () => {
     if (!currentList) return;

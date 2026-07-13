@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { tmdb } from '../services/tmdb';
 import { TMDBMedia, ViewState } from '../types';
@@ -31,6 +31,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   const [loading, setLoading] = useState(true);
   const [showCustomize, setShowCustomize] = useState(false);
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
+  const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const moviesNeedingRuntime: { id: number }[] = [];
@@ -39,7 +40,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     if (customLists && customLists.length > 0) {
       customLists.forEach(list => {
         list.items.forEach(item => {
-          if (item.mediaType === 'movie' && item.runtime === undefined && runtimesCache[item.tmdbId] === undefined) {
+          if (item.mediaType === 'movie' && item.runtime === undefined && !fetchedOrFetchingRef.current.has(item.tmdbId)) {
             if (!moviesNeedingRuntime.some(m => m.id === item.tmdbId)) {
               moviesNeedingRuntime.push({ id: item.tmdbId });
             }
@@ -51,7 +52,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     // 2. Check trending movies shown on screen
     if (trendingMovies && trendingMovies.length > 0) {
       trendingMovies.forEach(movie => {
-        if (!movie.runtime && runtimesCache[movie.id] === undefined) {
+        if (!movie.runtime && !fetchedOrFetchingRef.current.has(movie.id)) {
           if (!moviesNeedingRuntime.some(m => m.id === movie.id)) {
             moviesNeedingRuntime.push({ id: movie.id });
           }
@@ -62,7 +63,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     // 3. Check upcoming movies shown on screen
     if (upcomingMovies && upcomingMovies.length > 0) {
       upcomingMovies.forEach(movie => {
-        if (!movie.runtime && runtimesCache[movie.id] === undefined) {
+        if (!movie.runtime && !fetchedOrFetchingRef.current.has(movie.id)) {
           if (!moviesNeedingRuntime.some(m => m.id === movie.id)) {
             moviesNeedingRuntime.push({ id: movie.id });
           }
@@ -71,6 +72,9 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     }
 
     if (moviesNeedingRuntime.length === 0) return;
+
+    // Mark all as fetching
+    moviesNeedingRuntime.forEach(m => fetchedOrFetchingRef.current.add(m.id));
 
     let isMounted = true;
     async function fetchRuntimes() {
@@ -83,14 +87,17 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
           chunk.map(async (item) => {
             try {
               const details = await tmdb.getMovieDetails(item.id);
-              if (details && details.runtime && isMounted) {
+              if (details && isMounted) {
+                const rt = details.runtime || 0;
                 setRuntimesCache(prev => ({
                   ...prev,
-                  [item.id]: details.runtime || 0
+                  [item.id]: rt
                 }));
               }
             } catch (e) {
               console.log(`Failed to fetch runtime for movie ${item.id}:`, e);
+              // Remove on failure to allow retry if needed
+              fetchedOrFetchingRef.current.delete(item.id);
             }
           })
         );
@@ -101,7 +108,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     return () => {
       isMounted = false;
     };
-  }, [customLists, trendingMovies, upcomingMovies, runtimesCache]);
+  }, [customLists, trendingMovies, upcomingMovies]);
 
   // Available rows list mapping
   const allAvailableSections = [
