@@ -6,7 +6,7 @@ import { getPosterUrl, getBackdropUrl, formatDate, formatCurrency, formatRuntime
 import { 
   Star, Bookmark, Heart, ChevronLeft, Calendar, 
   Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv,
-  Plus, List, Shield
+  Plus, List, Shield, CheckSquare
 } from 'lucide-react';
 
 interface DetailsViewProps {
@@ -255,6 +255,8 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
     toggleMovieWatched,
     isEpisodeWatched,
     toggleEpisodeWatched,
+    toggleSeasonWatched,
+    watchedEpisodes,
     ratings,
     rateItem,
     getItemRating,
@@ -777,6 +779,11 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {Array.from({ length: media.number_of_seasons || 1 }).map((_, i) => {
                   const seasonNum = i + 1;
+                  const seasonObj = media.seasons?.find(s => s.season_number === seasonNum);
+                  const epCount = seasonObj?.episode_count || 0;
+                  const watchedCount = watchedEpisodes.filter(we => we.showId === media.id && we.seasonNumber === seasonNum).length;
+                  const isSeasonWatched = epCount > 0 && watchedCount >= epCount;
+                  
                   return (
                     <div
                       key={seasonNum}
@@ -792,7 +799,25 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
                         <div className="w-9 h-9 bg-primary-custom/10 text-primary-custom rounded-xl flex items-center justify-center shrink-0">
                           <Tv className="w-4.5 h-4.5" />
                         </div>
-                        <span className="font-bold text-sm text-foreground group-hover:text-primary-custom transition">Season {seasonNum}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm text-foreground group-hover:text-primary-custom transition">Season {seasonNum}</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {isSeasonWatched ? (
+                              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                <span>Watched</span>
+                              </span>
+                            ) : watchedCount > 0 ? (
+                              <span className="text-[10px] font-medium text-slate-400 bg-slate-800/40 px-1.5 py-0.5 rounded">
+                                {watchedCount}/{epCount} watched
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-medium text-slate-500">
+                                {epCount} episodes
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <ChevronRight className="w-4 h-4 text-muted-custom group-hover:text-primary-custom transition group-hover:translate-x-1" />
                     </div>
@@ -894,17 +919,47 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
       <div className="space-y-6 pb-16">
         
         {/* Simple Header */}
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={handleBack}
-            className="bg-card border border-border-custom text-foreground p-2 rounded-xl hover:bg-slate-800/10 transition"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h2 className="font-display font-extrabold text-xl text-foreground">{currentView.showName}</h2>
-            <p className="text-xs text-muted-custom font-semibold">Season {season.season_number} • {totalEps} Episodes</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleBack}
+              className="bg-card border border-border-custom text-foreground p-2 rounded-xl hover:bg-slate-800/10 transition"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="font-display font-extrabold text-xl text-foreground">{currentView.showName}</h2>
+              <p className="text-xs text-muted-custom font-semibold">Season {season.season_number} • {totalEps} Episodes</p>
+            </div>
           </div>
+
+          {user && totalEps > 0 && (
+            <button
+              onClick={async () => {
+                const allWatched = season.episodes?.every(ep => isEpisodeWatched(currentView.showId, season.season_number, ep.episode_number));
+                await toggleSeasonWatched(
+                  currentView.showId,
+                  season.season_number,
+                  currentView.showName,
+                  media?.poster_path || null,
+                  season.episodes || [],
+                  !allWatched
+                );
+              }}
+              className={`sm:ml-auto px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer self-start sm:self-auto border ${
+                season.episodes?.every(ep => isEpisodeWatched(currentView.showId, season.season_number, ep.episode_number))
+                  ? 'bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/20 text-emerald-500' 
+                  : 'bg-primary-custom/10 hover:bg-primary-custom/15 border-primary-custom/20 text-primary-custom'
+              }`}
+            >
+              <CheckSquare className="w-4 h-4 shrink-0" />
+              <span>
+                {season.episodes?.every(ep => isEpisodeWatched(currentView.showId, season.season_number, ep.episode_number))
+                  ? 'Unmark All Watched' 
+                  : 'Mark All as Watched'}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Season synopsis if exists */}

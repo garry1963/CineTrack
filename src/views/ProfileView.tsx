@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { auth, signOut, db, doc, setDoc } from '../firebase';
 import { AppSettings, ThemeMode, ViewState } from '../types';
-import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock } from 'lucide-react';
+import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2 } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { transformPassword } from '../lib/utils';
 
@@ -21,6 +21,7 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
     notes,
     customLists,
     logout,
+    deleteUserAccount,
     sharedUser,
     isViewingShared,
     loadSharedAccountByEmail,
@@ -32,6 +33,12 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  // Account Deletion States
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteEmailInput, setDeleteEmailInput] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [friendInput, setFriendInput] = useState('');
   const [loadingFriend, setLoadingFriend] = useState(false);
@@ -675,6 +682,90 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Danger Zone */}
+      {user && !isGuest && (
+        <div className="bg-card border border-red-500/20 p-6 rounded-3xl space-y-6 shadow-sm">
+          <div className="flex items-center gap-2 pb-3 border-b border-border-custom">
+            <Trash2 className="w-5 h-5 text-red-500" />
+            <h3 className="font-display font-bold text-base text-foreground">Danger Zone</h3>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-xs text-muted-custom leading-relaxed">
+              Permanently delete your CineTrack user account and erase all of your cloud tracking history, watchlist, favorites, themed lists, notes, and custom ratings. <strong>This action cannot be undone.</strong>
+            </p>
+
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="bg-red-500/10 hover:bg-red-500/15 border border-red-500/30 text-red-500 px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete My Account</span>
+              </button>
+            ) : (
+              <div className="bg-red-500/5 border border-red-500/10 p-4 rounded-2xl space-y-4 max-w-md">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-red-500 uppercase tracking-wider block">
+                    Confirm Account Deletion
+                  </label>
+                  <p className="text-[11px] text-muted-custom leading-normal">
+                    Please type your email address <strong>{user.email}</strong> to confirm you want to permanently delete your account:
+                  </p>
+                  <input
+                    type="text"
+                    required
+                    placeholder={user.email || ''}
+                    value={deleteEmailInput}
+                    onChange={(e) => setDeleteEmailInput(e.target.value)}
+                    className="w-full bg-background border border-border-custom px-3.5 py-2.5 rounded-xl text-xs text-foreground outline-none focus:border-red-500/50"
+                  />
+                </div>
+
+                {deleteError && (
+                  <p className="text-xs text-red-500 font-semibold">{deleteError}</p>
+                )}
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={async () => {
+                      setDeleteError('');
+                      if (deleteEmailInput.trim().toLowerCase() !== user.email?.trim().toLowerCase()) {
+                        setDeleteError('The entered email address does not match your account email.');
+                        return;
+                      }
+                      setDeleteLoading(true);
+                      try {
+                        await deleteUserAccount();
+                      } catch (err: any) {
+                        setDeleteError(err.message || 'An error occurred while deleting your account.');
+                      } finally {
+                        setDeleteLoading(false);
+                      }
+                    }}
+                    disabled={deleteLoading || deleteEmailInput.trim().toLowerCase() !== user.email?.trim().toLowerCase()}
+                    className="bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+                  >
+                    {deleteLoading ? 'Deleting Account...' : 'Permanently Delete Account'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteEmailInput('');
+                      setDeleteError('');
+                    }}
+                    disabled={deleteLoading}
+                    className="border border-border-custom hover:bg-slate-800/10 text-muted-custom font-semibold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

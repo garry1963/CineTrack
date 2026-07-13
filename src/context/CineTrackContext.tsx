@@ -70,6 +70,7 @@ interface CineTrackContextType {
   toggleFavorite: (media: TMDBMedia, mediaType: 'movie' | 'tv') => Promise<void>;
   toggleMovieWatched: (movieId: number, title: string, posterPath: string | null, status: 'Watched' | 'Wishlist' | 'Rewatch' | 'Unwatched') => Promise<void>;
   toggleEpisodeWatched: (showId: number, seasonNum: number, epNum: number, showTitle: string, posterPath: string | null, totalEpisodes: number) => Promise<void>;
+  toggleSeasonWatched: (showId: number, seasonNum: number, showTitle: string, posterPath: string | null, episodes: any[], watched: boolean) => Promise<void>;
   rateItem: (targetId: number | string, type: 'movie' | 'tv' | 'episode', rating: number) => Promise<void>;
   saveNote: (targetId: number | string, type: 'movie' | 'tv' | 'episode', content: string) => Promise<void>;
   saveCustomList: (list: Partial<CustomList>) => Promise<void>;
@@ -85,6 +86,7 @@ interface CineTrackContextType {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  deleteUserAccount: () => Promise<void>;
 }
 
 enum OperationType {
@@ -454,6 +456,81 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const toggleSeasonWatched = async (
+    showId: number,
+    seasonNum: number,
+    showTitle: string,
+    posterPath: string | null,
+    episodes: any[],
+    watched: boolean
+  ) => {
+    if (!user || isViewingShared) return;
+    try {
+      const batch = writeBatch(db);
+      
+      episodes.forEach((ep) => {
+        const epId = `${showId}_${seasonNum}_${ep.episode_number}`;
+        const isCurrentlyWatched = watchedEpisodes.some(we => we.id === epId);
+        
+        if (watched && !isCurrentlyWatched) {
+          const newEp: WatchedEpisode = {
+            id: epId,
+            showId,
+            seasonNumber: seasonNum,
+            episodeNumber: ep.episode_number,
+            watchedAt: Date.now()
+          };
+          batch.set(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
+        } else if (!watched && isCurrentlyWatched) {
+          batch.delete(doc(db, 'users', user.uid, 'watched_episodes', epId));
+        }
+      });
+      
+      let showEpsCount = watchedEpisodes.filter(we => we.showId === showId).length;
+      episodes.forEach(ep => {
+        const epId = `${showId}_${seasonNum}_${ep.episode_number}`;
+        const isCurrentlyWatched = watchedEpisodes.some(we => we.id === epId);
+        if (watched && !isCurrentlyWatched) {
+          showEpsCount++;
+        } else if (!watched && isCurrentlyWatched) {
+          showEpsCount = Math.max(0, showEpsCount - 1);
+        }
+      });
+      
+      const existingProgress = showProgress.find(p => p.showId === showId);
+      const totalEpisodes = existingProgress?.totalEpisodesCount || episodes.length;
+      
+      const lastEp = episodes[episodes.length - 1];
+      const lastEpNum = lastEp ? lastEp.episode_number : 1;
+      
+      const progress: TVShowProgress = {
+        showId,
+        title: showTitle,
+        posterPath,
+        status: showEpsCount === totalEpisodes ? 'Completed' : 'Current',
+        lastWatchedSeason: seasonNum,
+        lastWatchedEpisode: lastEpNum,
+        watchedEpisodesCount: showEpsCount,
+        totalEpisodesCount: totalEpisodes,
+        updatedAt: Date.now()
+      };
+      
+      batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
+      
+      await batch.commit();
+      
+      showNotification(
+        watched 
+          ? `All episodes for Season ${seasonNum} marked as watched.` 
+          : `All episodes for Season ${seasonNum} marked as unwatched.`,
+        'success',
+        showTitle
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/show_progress/${showId}`);
+    }
+  };
+
   const rateItem = async (targetId: number | string, type: 'movie' | 'tv' | 'episode', rating: number) => {
     if (!user || isViewingShared) return;
     const id = `${type}_${targetId}`;
@@ -598,6 +675,51 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     setCustomLists([]);
     setSettings(defaultSettings);
     setRuntimeTmdbApiKey(null);
+  };
+
+  const deleteUserAccount = async () => {
+    if (!auth.currentUser) {
+      throw new Error("No user is signed in.");
+    }
+    const userId = auth.currentUser.uid;
+    try {
+      setLoading(true);
+      const collectionsToDelete = [
+        'watchlist',
+        'favorites',
+        'show_progress',
+        'watched_episodes',
+        'watched_movies',
+        'ratings',
+        'notes',
+        'custom_lists'
+      ];
+      
+      const batch = writeBatch(db);
+      
+      for (const colName of collectionsToDelete) {
+        const querySnapshot = await getDocs(collection(db, 'users', userId, colName));
+        querySnapshot.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+      }
+      
+      batch.delete(doc(db, 'users', userId));
+      
+      await batch.commit();
+      
+      await auth.currentUser.delete();
+      setUser(null);
+      showNotification('Your account and all associated data have been deleted successfully.', 'success', 'Account Deleted');
+    } catch (err: any) {
+      console.error('Failed to delete account:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        throw new Error('For security reasons, this action requires a recent sign-in. Please sign out, sign back in, and try again.');
+      }
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Share functions
