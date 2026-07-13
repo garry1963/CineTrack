@@ -244,56 +244,48 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const userId = dbUserId;
 
     const unsubWatchlist = onSnapshot(collection(db, 'users', userId, 'watchlist'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setWatchlist(snap.docs.map(doc => doc.data() as WatchlistItem));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watchlist`);
     });
 
     const unsubFavorites = onSnapshot(collection(db, 'users', userId, 'favorites'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setFavorites(snap.docs.map(doc => doc.data() as FavoriteItem));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/favorites`);
     });
 
     const unsubShowProgress = onSnapshot(collection(db, 'users', userId, 'show_progress'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setShowProgress(snap.docs.map(doc => doc.data() as TVShowProgress));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/show_progress`);
     });
 
     const unsubWatchedEpisodes = onSnapshot(collection(db, 'users', userId, 'watched_episodes'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setWatchedEpisodes(snap.docs.map(doc => doc.data() as WatchedEpisode));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watched_episodes`);
     });
 
     const unsubWatchedMovies = onSnapshot(collection(db, 'users', userId, 'watched_movies'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setWatchedMovies(snap.docs.map(doc => doc.data() as WatchedMovie));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watched_movies`);
     });
 
     const unsubRatings = onSnapshot(collection(db, 'users', userId, 'ratings'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setRatings(snap.docs.map(doc => doc.data() as UserRating));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/ratings`);
     });
 
     const unsubNotes = onSnapshot(collection(db, 'users', userId, 'notes'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       setNotes(snap.docs.map(doc => doc.data() as UserNote));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/notes`);
     });
 
     const unsubCustomLists = onSnapshot(collection(db, 'users', userId, 'custom_lists'), (snap) => {
-      if (snap.metadata.hasPendingWrites) return;
       const lists = snap.docs.map(doc => doc.data() as CustomList);
       setCustomLists(lists.sort((a, b) => a.order - b.order));
     }, (error) => {
@@ -301,7 +293,6 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     });
 
     const unsubSettings = onSnapshot(doc(db, 'users', userId, 'settings', 'preferences'), (docSnap) => {
-      if (docSnap.metadata.hasPendingWrites) return;
       if (docSnap.exists()) {
         const loadedSettings = docSnap.data() as AppSettings;
         setSettings({ ...defaultSettings, ...loadedSettings });
