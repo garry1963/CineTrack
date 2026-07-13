@@ -12,6 +12,16 @@ interface HomeViewProps {
   onNavigate: (view: ViewState) => void;
 }
 
+// Global in-memory cache to make HomeView navigation instant
+let cachedHomeData: {
+  trendingMovies: TMDBMedia[];
+  trendingTV: TMDBMedia[];
+  upcomingMovies: TMDBMedia[];
+  recentlyPremiered: TMDBMedia[];
+  randomRecommendation: TMDBMedia | null;
+  timestamp: number;
+} | null = null;
+
 export default function HomeView({ onNavigate }: HomeViewProps) {
   const { 
     watchlist, 
@@ -23,12 +33,12 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     updateSettings
   } = useCineTrack();
 
-  const [trendingMovies, setTrendingMovies] = useState<TMDBMedia[]>([]);
-  const [trendingTV, setTrendingTV] = useState<TMDBMedia[]>([]);
-  const [upcomingMovies, setUpcomingMovies] = useState<TMDBMedia[]>([]);
-  const [recentlyPremiered, setRecentlyPremiered] = useState<TMDBMedia[]>([]);
-  const [randomRecommendation, setRandomRecommendation] = useState<TMDBMedia | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [trendingMovies, setTrendingMovies] = useState<TMDBMedia[]>(() => cachedHomeData?.trendingMovies || []);
+  const [trendingTV, setTrendingTV] = useState<TMDBMedia[]>(() => cachedHomeData?.trendingTV || []);
+  const [upcomingMovies, setUpcomingMovies] = useState<TMDBMedia[]>(() => cachedHomeData?.upcomingMovies || []);
+  const [recentlyPremiered, setRecentlyPremiered] = useState<TMDBMedia[]>(() => cachedHomeData?.recentlyPremiered || []);
+  const [randomRecommendation, setRandomRecommendation] = useState<TMDBMedia | null>(() => cachedHomeData?.randomRecommendation || null);
+  const [loading, setLoading] = useState(() => !cachedHomeData);
   const [showCustomize, setShowCustomize] = useState(false);
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
   const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
@@ -173,6 +183,10 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
 
   useEffect(() => {
     async function loadHomeData() {
+      if (cachedHomeData && Date.now() - cachedHomeData.timestamp < 10 * 60 * 1000) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         const [trendingM, trendingT, upcomingM, premieredT] = await Promise.all([
@@ -189,18 +203,31 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
         
         const trendingMoviesSlice = mResults.slice(0, 10);
         const upcomingMoviesSlice = upcomingResults.slice(0, 10);
+        const trendingTVSlice = tResults.slice(0, 10);
+        const recentlyPremieredSlice = premieredTResults.slice(0, 10);
 
         setTrendingMovies(trendingMoviesSlice);
-        setTrendingTV(tResults.slice(0, 10));
+        setTrendingTV(trendingTVSlice);
         setUpcomingMovies(upcomingMoviesSlice);
-        setRecentlyPremiered(premieredTResults.slice(0, 10));
+        setRecentlyPremiered(recentlyPremieredSlice);
 
         // Random recommendation from either movies or tv
-        const combined = [...trendingMoviesSlice, ...tResults.slice(0, 10)];
+        const combined = [...trendingMoviesSlice, ...trendingTVSlice];
+        let randomRec = null;
         if (combined.length > 0) {
           const randomIndex = Math.floor(Math.random() * combined.length);
-          setRandomRecommendation(combined[randomIndex]);
+          randomRec = combined[randomIndex];
+          setRandomRecommendation(randomRec);
         }
+
+        cachedHomeData = {
+          trendingMovies: trendingMoviesSlice,
+          trendingTV: trendingTVSlice,
+          upcomingMovies: upcomingMoviesSlice,
+          recentlyPremiered: recentlyPremieredSlice,
+          randomRecommendation: randomRec,
+          timestamp: Date.now()
+        };
       } catch (err) {
         console.error('Error loading home view data:', err);
       } finally {

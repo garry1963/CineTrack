@@ -27,6 +27,53 @@ export default function DiscoverView({ onNavigate }: DiscoverViewProps) {
   const loaderRef = useRef<HTMLDivElement>(null);
   const prevFiltersRef = useRef({ mediaType, section, selectedGenre });
 
+  const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
+  const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (mediaType !== 'movie' || items.length === 0) return;
+
+    const moviesNeedingRuntime = items.filter(
+      item => item.runtime === undefined && runtimesCache[item.id] === undefined && !fetchedOrFetchingRef.current.has(item.id)
+    );
+
+    if (moviesNeedingRuntime.length === 0) return;
+
+    moviesNeedingRuntime.forEach(item => fetchedOrFetchingRef.current.add(item.id));
+
+    let isMounted = true;
+    async function fetchRuntimes() {
+      const chunks = [];
+      for (let i = 0; i < moviesNeedingRuntime.length; i += 5) {
+        chunks.push(moviesNeedingRuntime.slice(i, i + 5));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(
+          chunk.map(async (item) => {
+            try {
+              const details = await tmdb.getMovieDetails(item.id);
+              if (details && isMounted) {
+                const rt = details.runtime || 0;
+                setRuntimesCache(prev => ({
+                  ...prev,
+                  [item.id]: rt
+                }));
+              }
+            } catch (e) {
+              fetchedOrFetchingRef.current.delete(item.id);
+            }
+          })
+        );
+      }
+    }
+    fetchRuntimes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items, mediaType]);
+
   useEffect(() => {
     async function loadGenres() {
       try {
@@ -93,19 +140,6 @@ export default function DiscoverView({ onNavigate }: DiscoverViewProps) {
         }
 
         let newItems = response?.results || [];
-        if (mediaType === 'movie') {
-          newItems = await Promise.all(
-            newItems.map(async (movie: TMDBMedia) => {
-              try {
-                const details = await tmdb.getMovieDetails(movie.id);
-                return { ...movie, runtime: details.runtime };
-              } catch (e) {
-                console.error(`Error fetching runtime for discover movie ${movie.id}:`, e);
-                return movie;
-              }
-            })
-          );
-        }
 
         if (page === 1) {
           setItems(newItems);
@@ -296,7 +330,7 @@ export default function DiscoverView({ onNavigate }: DiscoverViewProps) {
                 <div className="px-1 space-y-0.5">
                   <h3 className="font-bold text-xs truncate text-foreground group-hover:text-primary-custom transition" title={item.title || item.name}>
                     {item.title || item.name}
-                    {mediaType === 'movie' && item.runtime ? ` • ${formatRuntime(item.runtime)}` : ''}
+                    {mediaType === 'movie' && (item.runtime || runtimesCache[item.id]) ? ` • ${formatRuntime(item.runtime || runtimesCache[item.id])}` : ''}
                   </h3>
                   <p className="text-[10px] text-muted-custom">
                     {item.release_date?.substring(0, 4) || item.first_air_date?.substring(0, 4) || 'N/A'}

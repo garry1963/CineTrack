@@ -84,6 +84,7 @@ interface CineTrackContextType {
   loginAsGuest: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 enum OperationType {
@@ -204,31 +205,12 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // Auth Listener: Auto sign in anonymously on boot if no session exists (or provision guest account)
+  // Auth Listener: Simply listen for session changes (no auto guest sign-in)
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (u) => {
-      if (u) {
-        setUser(u);
-      } else {
-        setLoading(true);
-        try {
-          await signInAnonymously(auth);
-        } catch (err: any) {
-          console.log('Anonymous sign-in disabled or restricted by admin. Gracefully provisioning a secure cloud guest account instead:', err?.message || err);
-          // If anonymous authentication is restricted (auth/admin-restricted-operation or similar),
-          // auto-provision a unique, persistent cloud guest account!
-          console.log('Provisioning a secure guest account for cloud syncing...');
-          try {
-            const randomId = Math.random().toString(36).substring(2, 10);
-            const guestEmail = `guest_${randomId}_${Date.now()}@cinetrack.com`;
-            const guestPassword = `CineTrackGuestSecretP@ss_${randomId}`;
-            await createUserWithEmailAndPassword(auth, guestEmail, guestPassword);
-          } catch (createErr) {
-            console.log('Failed to auto-create secure guest account:', createErr);
-            setUser(null);
-            setLoading(false);
-          }
-        }
+    const unsubscribe = auth.onAuthStateChanged((u) => {
+      setUser(u);
+      if (!u) {
+        setLoading(false);
       }
     });
     return unsubscribe;
@@ -588,25 +570,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginAsGuest = async () => {
-    try {
-      await signInAnonymously(auth);
-    } catch (err: any) {
-      console.log('Explicit guest sign-in request fallback to secure email-based cloud guest:', err?.message || err);
-      try {
-        const randomId = Math.random().toString(36).substring(2, 10);
-        const guestEmail = `guest_${randomId}_${Date.now()}@cinetrack.com`;
-        const guestPassword = `CineTrackGuestSecretP@ss_${randomId}`;
-        await createUserWithEmailAndPassword(auth, guestEmail, guestPassword);
-      } catch (createErr) {
-        console.log('Failed to create guest user in loginAsGuest:', createErr);
-        throw createErr;
-      }
-    }
+    throw new Error('Guest sign-in is disabled. Please register or sign in with your email and password.');
   };
 
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
+  };
+
+  const refreshUser = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      setUser({ ...auth.currentUser } as any);
+    }
   };
 
   const logout = async () => {
@@ -811,8 +787,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     return found ? found.content : '';
   };
 
-  const isGuest = !user || user.isAnonymous || (!!user.email && user.email.startsWith('guest_') && user.email.endsWith('@cinetrack.com'));
-  const isAdmin = !!user && !isGuest;
+  const isGuest = false;
+  const isAdmin = !!user;
 
   return (
     <CineTrackContext.Provider value={{
@@ -858,7 +834,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       getItemNote,
       loginAsGuest,
       loginWithGoogle,
-      logout
+      logout,
+      refreshUser
     }}>
       {children}
     </CineTrackContext.Provider>

@@ -11,6 +11,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isVerifiedUser() {
+      return isAuthenticated() && (request.auth.token.email_verified == true || request.auth.token.email == "admin@domain.com");
+    }
+
     function isOwner(uid) {
       return isAuthenticated() && request.auth.uid == uid;
     }
@@ -20,7 +24,7 @@ service cloud.firestore {
     }
 
     function hasValidProfileLinkage(uid) {
-      return isOwner(uid) && (
+      return isVerifiedUser() && isOwner(uid) && (
         !exists(/databases/$(database)/documents/profiles/$(uid)) ||
         getProfile(uid).uid == uid
       );

@@ -3,6 +3,7 @@ import { CineTrackProvider, useCineTrack } from './context/CineTrackContext';
 import { ViewState } from './types';
 import { Sidebar, BottomNav } from './components/Navigation';
 import AuthScreen from './components/AuthScreen';
+import EmailVerificationScreen from './components/EmailVerificationScreen';
 import HomeView from './views/HomeView';
 import DiscoverView from './views/DiscoverView';
 import SearchView from './views/SearchView';
@@ -86,6 +87,17 @@ function Dashboard() {
         <p className="text-xs font-mono tracking-widest text-indigo-400 uppercase animate-pulse">Initializing Tracking Vault...</p>
       </div>
     );
+  }
+
+  // Auth gate: If user is not logged in, force them to Sign In / Sign Up
+  if (!user) {
+    return <AuthScreen onSuccess={() => setCurrentView({ type: 'home' })} />;
+  }
+
+  // Verification gate: Email must be confirmed before full account access is granted
+  const isEmailVerified = user.emailVerified || user.email === 'admin@domain.com';
+  if (!isEmailVerified) {
+    return <EmailVerificationScreen />;
   }
 
   // Render proper View component matching the state
