@@ -944,6 +944,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       toggleFavorite,
       toggleMovieWatched,
       toggleEpisodeWatched,
+      toggleSeasonWatched,
       rateItem,
       saveNote,
       saveCustomList,
@@ -958,7 +959,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       loginAsGuest,
       loginWithGoogle,
       logout,
-      refreshUser
+      refreshUser,
+      deleteUserAccount
     }}>
       {children}
     </CineTrackContext.Provider>
