@@ -16,6 +16,7 @@ import {
   signInWithPopup,
   signInAnonymously,
   createUserWithEmailAndPassword,
+  deleteUser,
   User 
 } from '../firebase';
 import { 
@@ -708,7 +709,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       
       await batch.commit();
       
-      await auth.currentUser.delete();
+      await deleteUser(auth.currentUser);
       setUser(null);
       showNotification('Your account and all associated data have been deleted successfully.', 'success', 'Account Deleted');
     } catch (err: any) {

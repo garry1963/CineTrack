@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
   User
@@ -69,6 +70,7 @@ export {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
   collection,
