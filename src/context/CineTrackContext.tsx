@@ -175,14 +175,73 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
+  const loadLocalCache = (userId: string) => {
+    try {
+      const cachedWatchlist = localStorage.getItem(`cinetrack_cache_${userId}_watchlist`);
+      const cachedFavorites = localStorage.getItem(`cinetrack_cache_${userId}_favorites`);
+      const cachedShowProgress = localStorage.getItem(`cinetrack_cache_${userId}_showProgress`);
+      const cachedWatchedEpisodes = localStorage.getItem(`cinetrack_cache_${userId}_watchedEpisodes`);
+      const cachedWatchedMovies = localStorage.getItem(`cinetrack_cache_${userId}_watchedMovies`);
+      const cachedRatings = localStorage.getItem(`cinetrack_cache_${userId}_ratings`);
+      const cachedNotes = localStorage.getItem(`cinetrack_cache_${userId}_notes`);
+      const cachedCustomLists = localStorage.getItem(`cinetrack_cache_${userId}_customLists`);
+      const cachedSettings = localStorage.getItem(`cinetrack_cache_${userId}_settings`);
+
+      if (cachedWatchlist) setWatchlist(JSON.parse(cachedWatchlist));
+      else setWatchlist([]);
+
+      if (cachedFavorites) setFavorites(JSON.parse(cachedFavorites));
+      else setFavorites([]);
+
+      if (cachedShowProgress) setShowProgress(JSON.parse(cachedShowProgress));
+      else setShowProgress([]);
+
+      if (cachedWatchedEpisodes) setWatchedEpisodes(JSON.parse(cachedWatchedEpisodes));
+      else setWatchedEpisodes([]);
+
+      if (cachedWatchedMovies) setWatchedMovies(JSON.parse(cachedWatchedMovies));
+      else setWatchedMovies([]);
+
+      if (cachedRatings) setRatings(JSON.parse(cachedRatings));
+      else setRatings([]);
+
+      if (cachedNotes) setNotes(JSON.parse(cachedNotes));
+      else setNotes([]);
+
+      if (cachedCustomLists) setCustomLists(JSON.parse(cachedCustomLists).sort((a: any, b: any) => a.order - b.order));
+      else setCustomLists([]);
+
+      if (cachedSettings) {
+        const parsed = JSON.parse(cachedSettings);
+        setSettings({ ...defaultSettings, ...parsed });
+        setRuntimeTmdbApiKey(parsed.tmdbApiKey || null);
+      } else {
+        setSettings(defaultSettings);
+        setRuntimeTmdbApiKey(null);
+      }
+    } catch (e) {
+      console.error('Error loading local cache:', e);
+    }
+  };
+
   const [sharedUser, setSharedUser] = useState<{ uid: string; email: string; displayName: string } | null>(null);
 
   // Sync dbUserId: use user.uid when logged in, or null when signed out
   useEffect(() => {
     if (user) {
       setDbUserId(user.uid);
+      loadLocalCache(user.uid);
     } else {
       setDbUserId(null);
+      setWatchlist([]);
+      setFavorites([]);
+      setShowProgress([]);
+      setWatchedEpisodes([]);
+      setWatchedMovies([]);
+      setRatings([]);
+      setNotes([]);
+      setCustomLists([]);
+      setSettings(defaultSettings);
     }
     setSharedUser(null);
   }, [user]);
@@ -227,52 +286,85 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     const userId = dbUserId;
+    const isViewingShared = dbUserId !== null && user !== null && dbUserId !== user.uid;
 
     const unsubWatchlist = onSnapshot(collection(db, 'users', userId, 'watchlist'), (snap) => {
-      setWatchlist(snap.docs.map(doc => doc.data() as WatchlistItem));
+      const data = snap.docs.map(doc => doc.data() as WatchlistItem);
+      setWatchlist(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_watchlist`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watchlist`);
     });
 
     const unsubFavorites = onSnapshot(collection(db, 'users', userId, 'favorites'), (snap) => {
-      setFavorites(snap.docs.map(doc => doc.data() as FavoriteItem));
+      const data = snap.docs.map(doc => doc.data() as FavoriteItem);
+      setFavorites(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_favorites`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/favorites`);
     });
 
     const unsubShowProgress = onSnapshot(collection(db, 'users', userId, 'show_progress'), (snap) => {
-      setShowProgress(snap.docs.map(doc => doc.data() as TVShowProgress));
+      const data = snap.docs.map(doc => doc.data() as TVShowProgress);
+      setShowProgress(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_showProgress`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/show_progress`);
     });
 
     const unsubWatchedEpisodes = onSnapshot(collection(db, 'users', userId, 'watched_episodes'), (snap) => {
-      setWatchedEpisodes(snap.docs.map(doc => doc.data() as WatchedEpisode));
+      const data = snap.docs.map(doc => doc.data() as WatchedEpisode);
+      setWatchedEpisodes(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_watchedEpisodes`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watched_episodes`);
     });
 
     const unsubWatchedMovies = onSnapshot(collection(db, 'users', userId, 'watched_movies'), (snap) => {
-      setWatchedMovies(snap.docs.map(doc => doc.data() as WatchedMovie));
+      const data = snap.docs.map(doc => doc.data() as WatchedMovie);
+      setWatchedMovies(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_watchedMovies`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watched_movies`);
     });
 
     const unsubRatings = onSnapshot(collection(db, 'users', userId, 'ratings'), (snap) => {
-      setRatings(snap.docs.map(doc => doc.data() as UserRating));
+      const data = snap.docs.map(doc => doc.data() as UserRating);
+      setRatings(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_ratings`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/ratings`);
     });
 
     const unsubNotes = onSnapshot(collection(db, 'users', userId, 'notes'), (snap) => {
-      setNotes(snap.docs.map(doc => doc.data() as UserNote));
+      const data = snap.docs.map(doc => doc.data() as UserNote);
+      setNotes(data);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_notes`, JSON.stringify(data));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/notes`);
     });
 
     const unsubCustomLists = onSnapshot(collection(db, 'users', userId, 'custom_lists'), (snap) => {
       const lists = snap.docs.map(doc => doc.data() as CustomList);
-      setCustomLists(lists.sort((a, b) => a.order - b.order));
+      const sorted = lists.sort((a, b) => a.order - b.order);
+      setCustomLists(sorted);
+      if (!isViewingShared) {
+        localStorage.setItem(`cinetrack_cache_${userId}_customLists`, JSON.stringify(sorted));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/custom_lists`);
     });
@@ -280,11 +372,18 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const unsubSettings = onSnapshot(doc(db, 'users', userId, 'settings', 'preferences'), (docSnap) => {
       if (docSnap.exists()) {
         const loadedSettings = docSnap.data() as AppSettings;
-        setSettings({ ...defaultSettings, ...loadedSettings });
+        const mergedSettings = { ...defaultSettings, ...loadedSettings };
+        setSettings(mergedSettings);
         setRuntimeTmdbApiKey(loadedSettings.tmdbApiKey || null);
+        if (!isViewingShared) {
+          localStorage.setItem(`cinetrack_cache_${userId}_settings`, JSON.stringify(mergedSettings));
+        }
       } else {
         setSettings(defaultSettings);
         setRuntimeTmdbApiKey(null);
+        if (!isViewingShared) {
+          localStorage.setItem(`cinetrack_cache_${userId}_settings`, JSON.stringify(defaultSettings));
+        }
       }
       setLoading(false);
     }, (err) => {
@@ -322,11 +421,18 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       item.runtime = runtimeVal;
     }
 
+    // Optimistic state and local storage write
+    setWatchlist(prev => {
+      const updated = [...prev.filter(w => w.id !== item.id), item];
+      localStorage.setItem(`cinetrack_cache_${user.uid}_watchlist`, JSON.stringify(updated));
+      return updated;
+    });
+    showNotification(`"${item.title}" has been successfully added to your Watchlist.`, 'success', 'Watchlist');
+
     try {
       await setDoc(doc(db, 'users', user.uid, 'watchlist', item.id), item);
-      showNotification(`"${item.title}" has been successfully added to your Watchlist.`, 'success', 'Watchlist');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watchlist/${item.id}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -335,11 +441,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const itemId = `${mediaType}_${tmdbId}`;
     const existingItem = watchlist.find(w => w.id === itemId);
     const title = existingItem ? existingItem.title : (mediaType === 'movie' ? 'Movie' : 'TV show');
+
+    // Optimistic state and local storage write
+    setWatchlist(prev => {
+      const updated = prev.filter(w => w.id !== itemId);
+      localStorage.setItem(`cinetrack_cache_${user.uid}_watchlist`, JSON.stringify(updated));
+      return updated;
+    });
+    showNotification(`"${title}" has been successfully removed from your Watchlist.`, 'success', 'Watchlist');
+
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'watchlist', itemId));
-      showNotification(`"${title}" has been successfully removed from your Watchlist.`, 'success', 'Watchlist');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/watchlist/${itemId}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -348,36 +462,71 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const docId = `${mediaType}_${media.id}`;
     const isFav = favorites.some(f => f.id === docId);
     const title = media.title || media.name || (mediaType === 'movie' ? 'Movie' : 'TV show');
-    try {
-      if (isFav) {
+
+    if (isFav) {
+      setFavorites(prev => {
+        const updated = prev.filter(f => f.id !== docId);
+        localStorage.setItem(`cinetrack_cache_${user.uid}_favorites`, JSON.stringify(updated));
+        return updated;
+      });
+      showNotification(`"${title}" has been successfully removed from your Favorites.`, 'success', 'Favorites');
+      try {
         await deleteDoc(doc(db, 'users', user.uid, 'favorites', docId));
-        showNotification(`"${title}" has been successfully removed from your Favorites.`, 'success', 'Favorites');
-      } else {
-        const item: FavoriteItem = {
-          id: docId,
-          tmdbId: media.id,
-          mediaType,
-          title: media.title || media.name || '',
-          posterPath: media.poster_path || null,
-          addedAt: Date.now()
-        };
-
-        const runtimeVal = media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : null);
-        if (runtimeVal !== null && runtimeVal !== undefined) {
-          item.runtime = runtimeVal;
-        }
-
-        await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
-        showNotification(`"${title}" has been successfully added to your Favorites.`, 'success', 'Favorites');
+      } catch (err) {
+        console.error('Firestore sync error:', err);
       }
-    } catch (err) {
-      handleFirestoreError(err, isFav ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/favorites/${docId}`);
+    } else {
+      const item: FavoriteItem = {
+        id: docId,
+        tmdbId: media.id,
+        mediaType,
+        title: media.title || media.name || '',
+        posterPath: media.poster_path || null,
+        addedAt: Date.now()
+      };
+
+      const runtimeVal = media.runtime || (media.episode_run_time && media.episode_run_time.length > 0 ? media.episode_run_time[0] : null);
+      if (runtimeVal !== null && runtimeVal !== undefined) {
+        item.runtime = runtimeVal;
+      }
+
+      setFavorites(prev => {
+        const updated = [...prev.filter(f => f.id !== docId), item];
+        localStorage.setItem(`cinetrack_cache_${user.uid}_favorites`, JSON.stringify(updated));
+        return updated;
+      });
+      showNotification(`"${title}" has been successfully added to your Favorites.`, 'success', 'Favorites');
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'favorites', docId), item);
+      } catch (err) {
+        console.error('Firestore sync error:', err);
+      }
     }
   };
 
   const toggleMovieWatched = async (movieId: number, title: string, posterPath: string | null, status: 'Watched' | 'Wishlist' | 'Rewatch' | 'Unwatched') => {
     if (!user || isViewingShared) return;
     const docId = `${movieId}`;
+
+    setWatchedMovies(prev => {
+      let updated;
+      if (status === 'Unwatched') {
+        updated = prev.filter(m => m.movieId !== movieId);
+      } else {
+        const item: WatchedMovie = {
+          movieId,
+          title,
+          posterPath,
+          status,
+          watchedAt: Date.now(),
+          watchCount: status === 'Rewatch' ? 2 : 1
+        };
+        updated = [...prev.filter(m => m.movieId !== movieId), item];
+      }
+      localStorage.setItem(`cinetrack_cache_${user.uid}_watchedMovies`, JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       if (status === 'Unwatched') {
         await deleteDoc(doc(db, 'users', user.uid, 'watched_movies', docId));
@@ -393,7 +542,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         await setDoc(doc(db, 'users', user.uid, 'watched_movies', docId), item);
       }
     } catch (err) {
-      handleFirestoreError(err, status === 'Unwatched' ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/watched_movies/${docId}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -409,26 +558,54 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const epId = `${showId}_${seasonNum}_${epNum}`;
     const isWatched = watchedEpisodes.some(we => we.id === epId);
 
+    // 1. Update watchedEpisodes state and cache
+    let updatedEps: WatchedEpisode[] = [];
+    setWatchedEpisodes(prev => {
+      if (isWatched) {
+        updatedEps = prev.filter(we => we.id !== epId);
+      } else {
+        const newEp: WatchedEpisode = {
+          id: epId,
+          showId,
+          seasonNumber: seasonNum,
+          episodeNumber: epNum,
+          watchedAt: Date.now()
+        };
+        updatedEps = [...prev.filter(we => we.id !== epId), newEp];
+      }
+      localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(updatedEps));
+      return updatedEps;
+    });
+
+    // 2. Update showProgress state and cache
+    const currentListForCount = isWatched
+      ? watchedEpisodes.filter(we => we.showId === showId && we.id !== epId)
+      : [...watchedEpisodes.filter(we => we.showId === showId), { id: epId, showId, seasonNumber: seasonNum, episodeNumber: epNum, watchedAt: Date.now() }];
+    const updatedCount = Math.max(0, currentListForCount.length);
+
+    const progress: TVShowProgress = {
+      showId,
+      title: showTitle,
+      posterPath,
+      status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
+      lastWatchedSeason: seasonNum,
+      lastWatchedEpisode: epNum,
+      watchedEpisodesCount: updatedCount,
+      totalEpisodesCount: totalEpisodes,
+      updatedAt: Date.now()
+    };
+
+    setShowProgress(prev => {
+      const updatedProgress = [...prev.filter(p => p.showId !== showId), progress];
+      localStorage.setItem(`cinetrack_cache_${user.uid}_showProgress`, JSON.stringify(updatedProgress));
+      return updatedProgress;
+    });
+
     try {
       const batch = writeBatch(db);
       if (isWatched) {
-        // Remove watched episode
         batch.delete(doc(db, 'users', user.uid, 'watched_episodes', epId));
-        const updatedCount = Math.max(0, watchedEpisodes.filter(we => we.showId === showId).length - 1);
-        const progress: TVShowProgress = {
-          showId,
-          title: showTitle,
-          posterPath,
-          status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
-          lastWatchedSeason: seasonNum,
-          lastWatchedEpisode: epNum,
-          watchedEpisodesCount: updatedCount,
-          totalEpisodesCount: totalEpisodes,
-          updatedAt: Date.now()
-        };
-        batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       } else {
-        // Add watched episode
         const newEp: WatchedEpisode = {
           id: epId,
           showId,
@@ -437,23 +614,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           watchedAt: Date.now()
         };
         batch.set(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
-        const updatedCount = watchedEpisodes.filter(we => we.showId === showId).length + 1;
-        const progress: TVShowProgress = {
-          showId,
-          title: showTitle,
-          posterPath,
-          status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
-          lastWatchedSeason: seasonNum,
-          lastWatchedEpisode: epNum,
-          watchedEpisodesCount: updatedCount,
-          totalEpisodesCount: totalEpisodes,
-          updatedAt: Date.now()
-        };
-        batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       }
+      batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       await batch.commit();
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watched_episodes/${epId}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -467,11 +632,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (!user || isViewingShared) return;
     try {
-      const batch = writeBatch(db);
-      
+      // 1. Calculate and update state & localStorage optimistically
+      let nextWatchedEpisodes = [...watchedEpisodes];
       episodes.forEach((ep) => {
         const epId = `${showId}_${seasonNum}_${ep.episode_number}`;
-        const isCurrentlyWatched = watchedEpisodes.some(we => we.id === epId);
+        const isCurrentlyWatched = nextWatchedEpisodes.some(we => we.id === epId);
         
         if (watched && !isCurrentlyWatched) {
           const newEp: WatchedEpisode = {
@@ -481,23 +646,16 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
             episodeNumber: ep.episode_number,
             watchedAt: Date.now()
           };
-          batch.set(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
+          nextWatchedEpisodes.push(newEp);
         } else if (!watched && isCurrentlyWatched) {
-          batch.delete(doc(db, 'users', user.uid, 'watched_episodes', epId));
+          nextWatchedEpisodes = nextWatchedEpisodes.filter(we => we.id !== epId);
         }
       });
-      
-      let showEpsCount = watchedEpisodes.filter(we => we.showId === showId).length;
-      episodes.forEach(ep => {
-        const epId = `${showId}_${seasonNum}_${ep.episode_number}`;
-        const isCurrentlyWatched = watchedEpisodes.some(we => we.id === epId);
-        if (watched && !isCurrentlyWatched) {
-          showEpsCount++;
-        } else if (!watched && isCurrentlyWatched) {
-          showEpsCount = Math.max(0, showEpsCount - 1);
-        }
-      });
-      
+
+      setWatchedEpisodes(nextWatchedEpisodes);
+      localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(nextWatchedEpisodes));
+
+      const showEpsCount = nextWatchedEpisodes.filter(we => we.showId === showId).length;
       const existingProgress = showProgress.find(p => p.showId === showId);
       const totalEpisodes = existingProgress?.totalEpisodesCount || episodes.length;
       
@@ -515,11 +673,13 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         totalEpisodesCount: totalEpisodes,
         updatedAt: Date.now()
       };
-      
-      batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
-      
-      await batch.commit();
-      
+
+      setShowProgress(prev => {
+        const updatedProgress = [...prev.filter(p => p.showId !== showId), progress];
+        localStorage.setItem(`cinetrack_cache_${user.uid}_showProgress`, JSON.stringify(updatedProgress));
+        return updatedProgress;
+      });
+
       showNotification(
         watched 
           ? `All episodes for Season ${seasonNum} marked as watched.` 
@@ -527,8 +687,31 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         'success',
         showTitle
       );
+
+      // 2. Perform Firestore write Batch in background
+      const batch = writeBatch(db);
+      episodes.forEach((ep) => {
+        const epId = `${showId}_${seasonNum}_${ep.episode_number}`;
+        const isCurrentlyWatched = watchedEpisodes.some(we => we.id === epId);
+        
+        if (watched && !isCurrentlyWatched) {
+          const newEp: WatchedEpisode = {
+            id: epId,
+            showId,
+            seasonNumber: seasonNum,
+            episodeNumber: ep.episode_number,
+            watchedAt: Date.now()
+          };
+          batch.set(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
+        } else if (!watched && isCurrentlyWatched) {
+          batch.delete(doc(db, 'users', user.uid, 'watched_episodes', epId));
+        }
+      });
+      batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
+      await batch.commit();
+
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/show_progress/${showId}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -542,16 +725,42 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       rating,
       updatedAt: Date.now()
     };
+
+    setRatings(prev => {
+      const updated = [...prev.filter(r => r.id !== id), item];
+      localStorage.setItem(`cinetrack_cache_${user.uid}_ratings`, JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await setDoc(doc(db, 'users', user.uid, 'ratings', id), item);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/ratings/${id}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
   const saveNote = async (targetId: number | string, type: 'movie' | 'tv' | 'episode', content: string) => {
     if (!user || isViewingShared) return;
     const id = `${type}_${targetId}`;
+
+    setNotes(prev => {
+      let updated;
+      if (!content.trim()) {
+        updated = prev.filter(n => n.id !== id);
+      } else {
+        const item: UserNote = {
+          id,
+          targetId,
+          type,
+          content,
+          updatedAt: Date.now()
+        };
+        updated = [...prev.filter(n => n.id !== id), item];
+      }
+      localStorage.setItem(`cinetrack_cache_${user.uid}_notes`, JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       if (!content.trim()) {
         await deleteDoc(doc(db, 'users', user.uid, 'notes', id));
@@ -566,7 +775,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         await setDoc(doc(db, 'users', user.uid, 'notes', id), item);
       }
     } catch (err) {
-      handleFirestoreError(err, !content.trim() ? OperationType.DELETE : OperationType.WRITE, `users/${user.uid}/notes/${id}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -611,22 +820,36 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    setCustomLists(prev => {
+      const updated = [...prev.filter(l => l.id !== listId), fullList].sort((a, b) => a.order - b.order);
+      localStorage.setItem(`cinetrack_cache_${user.uid}_customLists`, JSON.stringify(updated));
+      return updated;
+    });
+
+    if (notificationText && notificationTitle) {
+      showNotification(notificationText, 'success', notificationTitle);
+    }
+
     try {
       await setDoc(doc(db, 'users', user.uid, 'custom_lists', listId), fullList);
-      if (notificationText && notificationTitle) {
-        showNotification(notificationText, 'success', notificationTitle);
-      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/custom_lists/${listId}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
   const deleteCustomList = async (listId: string) => {
     if (!user || isViewingShared) return;
+
+    setCustomLists(prev => {
+      const updated = prev.filter(l => l.id !== listId);
+      localStorage.setItem(`cinetrack_cache_${user.uid}_customLists`, JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'custom_lists', listId));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/custom_lists/${listId}`);
+      console.error('Firestore sync error:', err);
     }
   };
 
@@ -639,10 +862,11 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (user && !isViewingShared) {
+      localStorage.setItem(`cinetrack_cache_${user.uid}_settings`, JSON.stringify(updated));
       try {
         await setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), updated);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/settings/preferences`);
+        console.error('Firestore sync error:', err);
       }
     }
   };

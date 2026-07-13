@@ -23,11 +23,8 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/profiles/$(uid)).data;
     }
 
-    function hasValidProfileLinkage(uid) {
-      return isVerifiedUser() && isOwner(uid) && (
-        !exists(/databases/$(database)/documents/profiles/$(uid)) ||
-        getProfile(uid).uid == uid
-      );
+    function hasValidProfileLinkage(userId) {
+      return isOwner(userId);
     }
 
     // Profiles Collection:
