@@ -659,7 +659,12 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = async () => {
     if (auth.currentUser) {
       await auth.currentUser.reload();
-      setUser({ ...auth.currentUser } as any);
+      await auth.currentUser.getIdToken(true);
+      const clonedUser = Object.assign(
+        Object.create(Object.getPrototypeOf(auth.currentUser)),
+        auth.currentUser
+      );
+      setUser(clonedUser);
     }
   };
 
