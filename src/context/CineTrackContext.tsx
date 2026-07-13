@@ -11,6 +11,7 @@ import {
   where,
   deleteDoc, 
   onSnapshot,
+  writeBatch,
   GoogleAuthProvider,
   signInWithPopup,
   signInAnonymously,
@@ -182,16 +183,17 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     setSharedUser(null);
   }, [user]);
 
-  // Update user profile mapping in Firestore for sharing lookup
+  // Update user profile mapping in Firestore for sharing lookup and real-time security linkage
   useEffect(() => {
-    const isGuestUser = !user || user.isAnonymous || (!!user.email && user.email.startsWith('guest_') && user.email.endsWith('@cinetrack.com'));
-    if (user && !isGuestUser && user.email) {
+    if (user) {
       const updateProfile = async () => {
         try {
+          const email = user.email || `anonymous_${user.uid}@cinetrack.com`;
+          const displayName = user.email ? user.email.split('@')[0] : 'Anonymous User';
           await setDoc(doc(db, 'profiles', user.uid), {
             uid: user.uid,
-            email: user.email.toLowerCase(),
-            displayName: user.email.split('@')[0],
+            email: email.toLowerCase(),
+            displayName: displayName,
             lastActive: Date.now()
           }, { merge: true });
         } catch (err) {
@@ -242,48 +244,56 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const userId = dbUserId;
 
     const unsubWatchlist = onSnapshot(collection(db, 'users', userId, 'watchlist'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setWatchlist(snap.docs.map(doc => doc.data() as WatchlistItem));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watchlist`);
     });
 
     const unsubFavorites = onSnapshot(collection(db, 'users', userId, 'favorites'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setFavorites(snap.docs.map(doc => doc.data() as FavoriteItem));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/favorites`);
     });
 
     const unsubShowProgress = onSnapshot(collection(db, 'users', userId, 'show_progress'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setShowProgress(snap.docs.map(doc => doc.data() as TVShowProgress));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/show_progress`);
     });
 
     const unsubWatchedEpisodes = onSnapshot(collection(db, 'users', userId, 'watched_episodes'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setWatchedEpisodes(snap.docs.map(doc => doc.data() as WatchedEpisode));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watched_episodes`);
     });
 
     const unsubWatchedMovies = onSnapshot(collection(db, 'users', userId, 'watched_movies'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setWatchedMovies(snap.docs.map(doc => doc.data() as WatchedMovie));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/watched_movies`);
     });
 
     const unsubRatings = onSnapshot(collection(db, 'users', userId, 'ratings'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setRatings(snap.docs.map(doc => doc.data() as UserRating));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/ratings`);
     });
 
     const unsubNotes = onSnapshot(collection(db, 'users', userId, 'notes'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       setNotes(snap.docs.map(doc => doc.data() as UserNote));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `users/${userId}/notes`);
     });
 
     const unsubCustomLists = onSnapshot(collection(db, 'users', userId, 'custom_lists'), (snap) => {
+      if (snap.metadata.hasPendingWrites) return;
       const lists = snap.docs.map(doc => doc.data() as CustomList);
       setCustomLists(lists.sort((a, b) => a.order - b.order));
     }, (error) => {
@@ -291,6 +301,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     });
 
     const unsubSettings = onSnapshot(doc(db, 'users', userId, 'settings', 'preferences'), (docSnap) => {
+      if (docSnap.metadata.hasPendingWrites) return;
       if (docSnap.exists()) {
         const loadedSettings = docSnap.data() as AppSettings;
         setSettings({ ...defaultSettings, ...loadedSettings });
@@ -423,9 +434,10 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const isWatched = watchedEpisodes.some(we => we.id === epId);
 
     try {
+      const batch = writeBatch(db);
       if (isWatched) {
         // Remove watched episode
-        await deleteDoc(doc(db, 'users', user.uid, 'watched_episodes', epId));
+        batch.delete(doc(db, 'users', user.uid, 'watched_episodes', epId));
         const updatedCount = Math.max(0, watchedEpisodes.filter(we => we.showId === showId).length - 1);
         const progress: TVShowProgress = {
           showId,
@@ -438,7 +450,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           totalEpisodesCount: totalEpisodes,
           updatedAt: Date.now()
         };
-        await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
+        batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       } else {
         // Add watched episode
         const newEp: WatchedEpisode = {
@@ -448,7 +460,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           episodeNumber: epNum,
           watchedAt: Date.now()
         };
-        await setDoc(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
+        batch.set(doc(db, 'users', user.uid, 'watched_episodes', epId), newEp);
         const updatedCount = watchedEpisodes.filter(we => we.showId === showId).length + 1;
         const progress: TVShowProgress = {
           showId,
@@ -461,8 +473,9 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
           totalEpisodesCount: totalEpisodes,
           updatedAt: Date.now()
         };
-        await setDoc(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
+        batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), progress);
       }
+      await batch.commit();
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/watched_episodes/${epId}`);
     }
@@ -691,44 +704,75 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const currentUid = user.uid;
 
     try {
+      let batch = writeBatch(db);
+      let opCount = 0;
+
+      const commitIfNeeded = async () => {
+        if (opCount >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      };
+
       // 1. Merge Watchlist
       for (const item of watchlist) {
-        await setDoc(doc(db, 'users', currentUid, 'watchlist', item.id), item);
+        batch.set(doc(db, 'users', currentUid, 'watchlist', item.id), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 2. Merge Favorites
       for (const item of favorites) {
-        await setDoc(doc(db, 'users', currentUid, 'favorites', item.id), item);
+        batch.set(doc(db, 'users', currentUid, 'favorites', item.id), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 3. Merge Show Progress
       for (const item of showProgress) {
-        await setDoc(doc(db, 'users', currentUid, 'show_progress', `${item.showId}`), item);
+        batch.set(doc(db, 'users', currentUid, 'show_progress', `${item.showId}`), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 4. Merge Watched Episodes
       for (const item of watchedEpisodes) {
-        await setDoc(doc(db, 'users', currentUid, 'watched_episodes', item.id), item);
+        batch.set(doc(db, 'users', currentUid, 'watched_episodes', item.id), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 5. Merge Watched Movies
       for (const item of watchedMovies) {
-        await setDoc(doc(db, 'users', currentUid, 'watched_movies', `${item.movieId}`), item);
+        batch.set(doc(db, 'users', currentUid, 'watched_movies', `${item.movieId}`), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 6. Merge Ratings
       for (const item of ratings) {
-        await setDoc(doc(db, 'users', currentUid, 'ratings', item.id), item);
+        batch.set(doc(db, 'users', currentUid, 'ratings', item.id), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 7. Merge Notes
       for (const item of notes) {
-        await setDoc(doc(db, 'users', currentUid, 'notes', item.id), item);
+        batch.set(doc(db, 'users', currentUid, 'notes', item.id), item);
+        opCount++;
+        await commitIfNeeded();
       }
 
       // 8. Merge Custom Lists
       for (const item of customLists) {
-        await setDoc(doc(db, 'users', currentUid, 'custom_lists', item.id), item);
+        batch.set(doc(db, 'users', currentUid, 'custom_lists', item.id), item);
+        opCount++;
+        await commitIfNeeded();
+      }
+
+      if (opCount > 0) {
+        await batch.commit();
       }
 
       stopViewingSharedAccount();

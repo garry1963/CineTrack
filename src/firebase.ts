@@ -13,8 +13,7 @@ import {
 import { 
   getFirestore, 
   initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
   collection,
   doc,
   setDoc,
@@ -25,6 +24,8 @@ import {
   where,
   orderBy,
   onSnapshot,
+  writeBatch,
+  runTransaction,
   Firestore
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json' assert { type: 'json' };
@@ -46,12 +47,10 @@ const auth = getAuth(app);
 let db: Firestore;
 try {
   db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
+    localCache: memoryLocalCache()
   }, firebaseConfig.firestoreDatabaseId || '(default)');
 } catch (error) {
-  console.warn('Failed to initialize Firestore with custom database and persistent cache, falling back to standard Firestore:', error);
+  console.warn('Failed to initialize Firestore with custom database and memory cache, falling back to standard Firestore:', error);
   try {
     db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
   } catch (fallbackError) {
@@ -79,6 +78,8 @@ export {
   query,
   where,
   orderBy,
-  onSnapshot
+  onSnapshot,
+  writeBatch,
+  runTransaction
 };
 export type { User };

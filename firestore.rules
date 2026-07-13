@@ -6,64 +6,101 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function getProfile(uid) {
+      return get(/databases/$(database)/documents/profiles/$(uid)).data;
+    }
+
+    function hasValidProfileLinkage(uid) {
+      return isOwner(uid) && getProfile(uid).uid == uid;
+    }
+
     // Profiles Collection:
     // Anyone can read profiles to search by email or load shared library.
-    // Only the user themselves can write their own profile.
+    // Only the user themselves can write their own profile, with creation timestamp constraint.
     match /profiles/{uid} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if isOwner(uid) && request.resource.data.lastActive <= request.time.toMillis();
+      allow delete: if isOwner(uid);
     }
 
     // Users Database:
-    // Anyone can read user tracking data (watchlist, favorites, progress, custom lists, ratings, notes, settings) for sharing.
-    // Only the owner or authenticated administrator can write to their own or centralized 'admin_vault' tracking data.
+    // Anyone can read user tracking data for sharing.
+    // Writes (create, update, delete) are tightly verified using get() validation for profile presence,
+    // request.auth for ownership, and request.time for write freshness.
     match /users/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+      allow write: if hasValidProfileLinkage(userId);
 
       match /settings/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow write: if hasValidProfileLinkage(userId);
       }
 
       match /watchlist/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.addedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /favorites/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.addedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /show_progress/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.updatedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /watched_episodes/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.watchedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /watched_movies/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.watchedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /ratings/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.rating >= 1 
+                             && request.resource.data.rating <= 10
+                             && request.resource.data.updatedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /notes/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.updatedAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
 
       match /custom_lists/{docId} {
         allow read: if true;
-        allow write: if request.auth != null && (request.auth.uid == userId || userId == "admin_vault");
+        allow create, update: if hasValidProfileLinkage(userId) 
+                             && request.resource.data.createdAt <= request.time.toMillis();
+        allow delete: if hasValidProfileLinkage(userId);
       }
     }
   }
