@@ -27,6 +27,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     watchlist, 
     favorites, 
     showProgress, 
+    watchedEpisodes,
     watchedMovies, 
     customLists,
     settings,
@@ -41,7 +42,82 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   const [loading, setLoading] = useState(() => !cachedHomeData);
   const [showCustomize, setShowCustomize] = useState(false);
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
+  const [resolvedProgress, setResolvedProgress] = useState<Record<number, {
+    totalEpisodes: number;
+    nextSeason: number;
+    nextEpisode: number;
+    watchedEpisodesCount: number;
+  }>>({});
   const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!showProgress || showProgress.length === 0) return;
+
+    let isMounted = true;
+    async function resolveProgressDetails() {
+      const results: typeof resolvedProgress = {};
+      await Promise.all(
+        showProgress.map(async (prog) => {
+          try {
+            const details = await tmdb.getShowDetails(prog.showId);
+            if (!details) return;
+
+            const totalCount = details.number_of_episodes || 0;
+            const seasons = (details.seasons || [])
+              .filter((s: any) => s.season_number > 0)
+              .sort((a: any, b: any) => a.season_number - b.season_number);
+
+            const watchedForShow = watchedEpisodes.filter(we => we.showId === prog.showId);
+            const watchedCount = watchedForShow.length;
+
+            // Find first unmarked episode
+            let nextS = 1;
+            let nextE = 1;
+            let found = false;
+
+            for (const s of seasons) {
+              const epCount = s.episode_count || 0;
+              for (let e = 1; e <= epCount; e++) {
+                const epId = `${prog.showId}_${s.season_number}_${e}`;
+                const isWatched = watchedEpisodes.some(we => we.id === epId);
+                if (!isWatched) {
+                  nextS = s.season_number;
+                  nextE = e;
+                  found = true;
+                  break;
+                }
+              }
+              if (found) break;
+            }
+
+            if (!found && seasons.length > 0) {
+              const lastS = seasons[seasons.length - 1];
+              nextS = lastS.season_number;
+              nextE = lastS.episode_count || 1;
+            }
+
+            results[prog.showId] = {
+              totalEpisodes: totalCount,
+              nextSeason: nextS,
+              nextEpisode: nextE,
+              watchedEpisodesCount: watchedCount
+            };
+          } catch (e) {
+            console.error(`Failed to resolve details for show ${prog.showId}:`, e);
+          }
+        })
+      );
+
+      if (isMounted) {
+        setResolvedProgress(prev => ({ ...prev, ...results }));
+      }
+    }
+
+    resolveProgressDetails();
+    return () => {
+      isMounted = false;
+    };
+  }, [showProgress, watchedEpisodes]);
 
   useEffect(() => {
     const moviesNeedingRuntime: { id: number }[] = [];
@@ -480,9 +556,16 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {showProgress.map((prog) => {
-                    const percent = prog.totalEpisodesCount > 0 
-                      ? Math.round((prog.watchedEpisodesCount / prog.totalEpisodesCount) * 100) 
+                    const resolved = resolvedProgress[prog.showId];
+                    const totalEps = resolved ? resolved.totalEpisodes : prog.totalEpisodesCount;
+                    const watchedEps = resolved ? resolved.watchedEpisodesCount : prog.watchedEpisodesCount;
+                    const percent = totalEps > 0 
+                      ? Math.round((watchedEps / totalEps) * 100) 
                       : 0;
+                    
+                    const displaySeason = resolved ? resolved.nextSeason : prog.lastWatchedSeason;
+                    const displayEpisode = resolved ? resolved.nextEpisode : prog.lastWatchedEpisode;
+
                     return (
                       <div 
                         key={prog.showId}
@@ -501,12 +584,12 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                               {prog.title}
                             </h3>
                             <p className="text-[11px] text-muted-custom font-mono mt-1">
-                              Up Next: S{prog.lastWatchedSeason < 10 ? '0' + prog.lastWatchedSeason : prog.lastWatchedSeason}E{prog.lastWatchedEpisode < 10 ? '0' + prog.lastWatchedEpisode : prog.lastWatchedEpisode}
+                              Up Next: S{displaySeason < 10 ? '0' + displaySeason : displaySeason}E{displayEpisode < 10 ? '0' + displayEpisode : displayEpisode}
                             </p>
                           </div>
                           <div className="space-y-1.5">
                             <div className="flex items-center justify-between text-[10px] font-medium text-muted-custom">
-                              <span>{prog.watchedEpisodesCount} / {prog.totalEpisodesCount} episodes</span>
+                              <span>{watchedEps} / {totalEps} episodes</span>
                               <span className="font-bold text-primary-custom">{percent}%</span>
                             </div>
                             <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">

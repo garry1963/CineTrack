@@ -32,7 +32,7 @@ import {
   TMDBMedia,
   ToastNotification
 } from '../types';
-import { setRuntimeTmdbApiKey } from '../services/tmdb';
+import { setRuntimeTmdbApiKey, tmdb } from '../services/tmdb';
 
 export interface LocalUser {
   uid: string;
@@ -147,6 +147,75 @@ const defaultSettings: AppSettings = {
   autoSync: true,
   cacheSize: '50MB'
 };
+
+async function getShowWatchStats(showId: number, updatedWatchedEpisodes: WatchedEpisode[]) {
+  let totalEpisodesCount = 0;
+  let nextSeason = 1;
+  let nextEpisode = 1;
+  let seasonsList: { season_number: number; episode_count: number }[] = [];
+
+  try {
+    const showDetails = await tmdb.getShowDetails(showId);
+    if (showDetails) {
+      totalEpisodesCount = showDetails.number_of_episodes || 0;
+      seasonsList = (showDetails.seasons || [])
+        .filter((s: any) => s.season_number > 0)
+        .map((s: any) => ({
+          season_number: s.season_number,
+          episode_count: s.episode_count || 0
+        }));
+    }
+  } catch (e) {
+    console.error("Failed to fetch show details for stats calculation:", e);
+  }
+
+  // Fallback if we couldn't load seasons
+  if (seasonsList.length === 0) {
+    const watchedForShow = updatedWatchedEpisodes.filter(we => we.showId === showId);
+    const maxSeason = Math.max(1, ...watchedForShow.map(we => we.seasonNumber));
+    const maxEp = Math.max(1, ...watchedForShow.map(we => we.episodeNumber));
+    totalEpisodesCount = Math.max(watchedForShow.length, 12);
+    return {
+      totalEpisodesCount,
+      nextSeason: maxSeason,
+      nextEpisode: maxEp + 1
+    };
+  }
+
+  const sumOfEpisodes = seasonsList.reduce((sum, s) => sum + s.episode_count, 0);
+  if (sumOfEpisodes > 0) {
+    totalEpisodesCount = sumOfEpisodes;
+  }
+
+  seasonsList.sort((a, b) => a.season_number - b.season_number);
+
+  let foundNext = false;
+  for (const s of seasonsList) {
+    for (let e = 1; e <= s.episode_count; e++) {
+      const epId = `${showId}_${s.season_number}_${e}`;
+      const isWatched = updatedWatchedEpisodes.some(we => we.id === epId);
+      if (!isWatched) {
+        nextSeason = s.season_number;
+        nextEpisode = e;
+        foundNext = true;
+        break;
+      }
+    }
+    if (foundNext) break;
+  }
+
+  if (!foundNext && seasonsList.length > 0) {
+    const lastSeason = seasonsList[seasonsList.length - 1];
+    nextSeason = lastSeason.season_number;
+    nextEpisode = lastSeason.episode_count;
+  }
+
+  return {
+    totalEpisodesCount,
+    nextSeason,
+    nextEpisode
+  };
+}
 
 export function CineTrackProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | LocalUser | null>(null);
@@ -571,40 +640,27 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     const epId = `${showId}_${seasonNum}_${epNum}`;
     const isWatched = watchedEpisodes.some(we => we.id === epId);
 
-    // 1. Update watchedEpisodes state and cache
-    let updatedEps: WatchedEpisode[] = [];
-    setWatchedEpisodes(prev => {
-      if (isWatched) {
-        updatedEps = prev.filter(we => we.id !== epId);
-      } else {
-        const newEp: WatchedEpisode = {
-          id: epId,
-          showId,
-          seasonNumber: seasonNum,
-          episodeNumber: epNum,
-          watchedAt: Date.now()
-        };
-        updatedEps = [...prev.filter(we => we.id !== epId), newEp];
-      }
-      localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(updatedEps));
-      return updatedEps;
-    });
+    // 1. Calculate next watched episodes optimistically
+    const nextWatchedEpisodes = isWatched
+      ? watchedEpisodes.filter(we => we.id !== epId)
+      : [...watchedEpisodes.filter(we => we.id !== epId), { id: epId, showId, seasonNumber: seasonNum, episodeNumber: epNum, watchedAt: Date.now() }];
 
-    // 2. Update showProgress state and cache
-    const currentListForCount = isWatched
-      ? watchedEpisodes.filter(we => we.showId === showId && we.id !== epId)
-      : [...watchedEpisodes.filter(we => we.showId === showId), { id: epId, showId, seasonNumber: seasonNum, episodeNumber: epNum, watchedAt: Date.now() }];
-    const updatedCount = Math.max(0, currentListForCount.length);
+    setWatchedEpisodes(nextWatchedEpisodes);
+    localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(nextWatchedEpisodes));
+
+    // 2. Fetch/calculate actual total episodes count and the next unmarked episode
+    const { totalEpisodesCount, nextSeason, nextEpisode } = await getShowWatchStats(showId, nextWatchedEpisodes);
+    const updatedCount = nextWatchedEpisodes.filter(we => we.showId === showId).length;
 
     const progress: TVShowProgress = {
       showId,
       title: showTitle,
       posterPath,
-      status: updatedCount === totalEpisodes ? 'Completed' : 'Current',
-      lastWatchedSeason: seasonNum,
-      lastWatchedEpisode: epNum,
+      status: updatedCount >= totalEpisodesCount ? 'Completed' : 'Current',
+      lastWatchedSeason: nextSeason,
+      lastWatchedEpisode: nextEpisode,
       watchedEpisodesCount: updatedCount,
-      totalEpisodesCount: totalEpisodes,
+      totalEpisodesCount: totalEpisodesCount,
       updatedAt: Date.now()
     };
 
@@ -668,22 +724,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       setWatchedEpisodes(nextWatchedEpisodes);
       localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(nextWatchedEpisodes));
 
+      // Calculate actual total episodes count and the next unmarked episode
+      const { totalEpisodesCount, nextSeason, nextEpisode } = await getShowWatchStats(showId, nextWatchedEpisodes);
       const showEpsCount = nextWatchedEpisodes.filter(we => we.showId === showId).length;
-      const existingProgress = showProgress.find(p => p.showId === showId);
-      const totalEpisodes = existingProgress?.totalEpisodesCount || episodes.length;
-      
-      const lastEp = episodes[episodes.length - 1];
-      const lastEpNum = lastEp ? lastEp.episode_number : 1;
       
       const progress: TVShowProgress = {
         showId,
         title: showTitle,
         posterPath,
-        status: showEpsCount === totalEpisodes ? 'Completed' : 'Current',
-        lastWatchedSeason: seasonNum,
-        lastWatchedEpisode: lastEpNum,
+        status: showEpsCount >= totalEpisodesCount ? 'Completed' : 'Current',
+        lastWatchedSeason: nextSeason,
+        lastWatchedEpisode: nextEpisode,
         watchedEpisodesCount: showEpsCount,
-        totalEpisodesCount: totalEpisodes,
+        totalEpisodesCount: totalEpisodesCount,
         updatedAt: Date.now()
       };
 

@@ -64,7 +64,7 @@ export function BottomNav({
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl bg-card border-t md:border border-border-custom px-4 py-2 flex justify-around items-center z-40 shadow-2xl md:rounded-2xl md:backdrop-blur-xl bg-card/95 pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 w-full bg-card border-t border-border-custom px-4 py-2 flex justify-around items-center z-40 shadow-2xl backdrop-blur-xl bg-card/95 pb-safe">
         {mainNavItems.map((item) => {
           const isActive = currentView.type === item.id && !moreOpen;
           const Icon = item.icon;
@@ -116,7 +116,7 @@ export function BottomNav({
         className={`fixed z-50 p-6 shadow-2xl transition-all duration-300 transform bg-card border-border-custom
           ${moreOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-12 opacity-0 pointer-events-none'}
           bottom-0 left-0 right-0 rounded-t-3xl border-t
-          md:bottom-24 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-[450px] md:rounded-3xl md:border md:mb-2
+          md:bottom-18 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-[450px] md:rounded-3xl md:border md:mb-2
         `}
       >
         {/* Grab Handle indicator */}
