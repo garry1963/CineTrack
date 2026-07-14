@@ -537,8 +537,14 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
       {/* Dynamic Configured Feed Rows */}
       {homeSections.map((sectionId) => {
         switch (sectionId) {
-          case 'continue-watching':
-            if (showProgress.length === 0) return null;
+          case 'continue-watching': {
+            const activeProgress = showProgress.filter((prog) => {
+              const resolved = resolvedProgress[prog.showId];
+              const totalEps = resolved ? resolved.totalEpisodes : prog.totalEpisodesCount;
+              const watchedEps = resolved ? resolved.watchedEpisodesCount : prog.watchedEpisodesCount;
+              return totalEps === 0 || watchedEps < totalEps;
+            });
+            if (activeProgress.length === 0) return null;
             return (
               <div key="continue-watching" className="space-y-4 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -555,7 +561,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {showProgress.map((prog) => {
+                  {activeProgress.map((prog) => {
                     const resolved = resolvedProgress[prog.showId];
                     const totalEps = resolved ? resolved.totalEpisodes : prog.totalEpisodesCount;
                     const watchedEps = resolved ? resolved.watchedEpisodesCount : prog.watchedEpisodesCount;
@@ -606,6 +612,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                 </div>
               </div>
             );
+          }
 
           case 'trending-movies':
             if (trendingMovies.length === 0) return null;
