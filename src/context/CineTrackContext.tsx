@@ -278,6 +278,19 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  // Timeout fallback for loading state to prevent infinite loader on slow connection/offline boot
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        if (loading) {
+          console.warn("Loading state timed out, forcing loading false for offline access.");
+          setLoading(false);
+        }
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
   // Sync with Firestore
   useEffect(() => {
     if (!dbUserId) {

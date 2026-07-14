@@ -15,7 +15,8 @@ import {
 import { 
   getFirestore, 
   initializeFirestore,
-  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection,
   doc,
   setDoc,
@@ -49,10 +50,12 @@ const auth = getAuth(app);
 let db: Firestore;
 try {
   db = initializeFirestore(app, {
-    localCache: memoryLocalCache()
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
   }, firebaseConfig.firestoreDatabaseId || '(default)');
 } catch (error) {
-  console.warn('Failed to initialize Firestore with custom database and memory cache, falling back to standard Firestore:', error);
+  console.warn('Failed to initialize Firestore with custom database and persistent cache, falling back to standard Firestore:', error);
   try {
     db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
   } catch (fallbackError) {

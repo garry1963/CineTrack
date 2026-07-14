@@ -1,10 +1,11 @@
 {
   "projectId": "my-cinetrack",
-  "appId": "1:384229555160:web:f2ca5aadef5e84c1b010ad",
+  "appId": "1:384229555160:web:0cde3ca3f4904c42b010ad",
   "apiKey": "AIzaSyApZCgdjauV6VCZ_oyrUZU5evxaz1NfXWQ",
   "authDomain": "my-cinetrack.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "firestoreDatabaseId": "ai-studio-cinetrack-20bb730d-d9e7-4d43-8cfe-e9475fb56e93",
   "storageBucket": "my-cinetrack.firebasestorage.app",
   "messagingSenderId": "384229555160",
-  "measurementId": "G-7848TEM3K9"
+  "measurementId": "",
+  "oAuthClientId": "384229555160-crh73ev8635j05ppen050h1i0m3bac47.apps.googleusercontent.com"
 }
