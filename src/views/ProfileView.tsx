@@ -427,6 +427,64 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
             </select>
           </div>
 
+          {/* Bottom Bar Customization */}
+          <div className="space-y-3 pt-4 border-t border-border-custom/50">
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-custom">Bottom Navigation Bar Items</label>
+              <p className="text-[10px] text-muted-custom leading-normal">
+                Select which items appear directly on your floating bottom navigation bar. Any unchecked items will be placed inside the "More" items tab.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {[
+                { id: 'home', label: 'Home' },
+                { id: 'discover', label: 'Discover' },
+                { id: 'search', label: 'Search' },
+                { id: 'watchlist', label: 'Watchlist' },
+                { id: 'calendar', label: 'Calendar' },
+                { id: 'statistics', label: 'Statistics' },
+                { id: 'profile', label: 'Profile' },
+              ].map((item) => {
+                const currentItems = settings.bottomNavItems || ['home', 'discover', 'search', 'watchlist'];
+                const isChecked = currentItems.includes(item.id);
+                
+                return (
+                  <button
+                    key={item.id}
+                    onClick={async () => {
+                      let nextItems = [...currentItems];
+                      if (isChecked) {
+                        if (currentItems.length <= 1) {
+                          alert("You must keep at least one item visible on your bottom bar.");
+                          return;
+                        }
+                        nextItems = nextItems.filter(id => id !== item.id);
+                      } else {
+                        nextItems.push(item.id);
+                      }
+                      await updateSettings({ bottomNavItems: nextItems });
+                    }}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-xs font-semibold text-left transition cursor-pointer ${
+                      isChecked
+                        ? 'bg-primary-custom/10 border-primary-custom/30 text-primary-custom'
+                        : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded flex items-center justify-center border transition ${
+                      isChecked 
+                        ? 'bg-primary-custom border-primary-custom text-white' 
+                        : 'border-muted-custom/40'
+                    }`}>
+                      {isChecked && <Check className="w-3 h-3 stroke-[3px]" />}
+                    </div>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Custom TMDB API Key for Standalone Mode */}
           {user && (
             <div className="space-y-1.5 pt-3 border-t border-border-custom/50">

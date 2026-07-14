@@ -130,20 +130,10 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
       
-      {/* Desktop collapsible sidebar */}
-      <Sidebar
-        currentView={currentView}
-        onNavigate={handleNavigate}
-        sidebarCollapsed={sidebarCollapsed}
-        setSidebarCollapsed={setSidebarCollapsed}
-        userEmail={user?.email || null}
-        onLogout={handleLogout}
-      />
-
       {/* Main content scroll container */}
-      <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto pb-24 md:pb-8">
+      <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto pb-28 md:pb-32">
         
         {/* Viewing Shared Library warning banner */}
         {isViewingShared && sharedUser && (
