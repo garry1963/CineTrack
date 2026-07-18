@@ -31,6 +31,9 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
 
   // Dynamic runtime cache for items that don't have stored runtime
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
+  const [releaseDatesCache, setReleaseDatesCache] = useState<Record<number, string>>({});
+  const [customListFilterType, setCustomListFilterType] = useState<'all' | 'movie' | 'tv'>('all');
+  const [customListSortOption, setCustomListSortOption] = useState<'added' | 'alpha' | 'runtime' | 'release'>('added');
   const [bulkAddFeedback, setBulkAddFeedback] = useState<string | null>(null);
   const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
 
@@ -90,6 +93,71 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
       isMounted = false;
     };
   }, [watchlist, favorites, activeTab, currentList]);
+
+  // Dynamic fetcher for custom list items missing metadata (releaseDate, runtime)
+  useEffect(() => {
+    if (activeTab !== 'custom_lists' || !currentList) return;
+
+    // Items that are movies and miss either runtime or releaseDate, or TV shows that miss releaseDate
+    const itemsNeedingMetadata = currentList.items.filter(item => {
+      const alreadyFetched = fetchedOrFetchingRef.current.has(item.tmdbId);
+      if (alreadyFetched) return false;
+
+      if (item.mediaType === 'movie') {
+        const hasStoredRuntime = item.runtime !== undefined;
+        const hasStoredReleaseDate = item.releaseDate !== undefined;
+        const hasCachedRuntime = runtimesCache[item.tmdbId] !== undefined;
+        const hasCachedReleaseDate = releaseDatesCache[item.tmdbId] !== undefined;
+        return !(hasStoredRuntime && hasStoredReleaseDate) && !(hasCachedRuntime && hasCachedReleaseDate);
+      } else {
+        const hasStoredReleaseDate = item.releaseDate !== undefined;
+        const hasCachedReleaseDate = releaseDatesCache[item.tmdbId] !== undefined;
+        return !hasStoredReleaseDate && !hasCachedReleaseDate;
+      }
+    });
+
+    if (itemsNeedingMetadata.length === 0) return;
+
+    itemsNeedingMetadata.forEach(item => fetchedOrFetchingRef.current.add(item.tmdbId));
+
+    let isMounted = true;
+    async function fetchMetadata() {
+      const chunkSize = 5;
+      for (let i = 0; i < itemsNeedingMetadata.length; i += chunkSize) {
+        if (!isMounted) break;
+        const chunk = itemsNeedingMetadata.slice(i, i + chunkSize);
+        await Promise.all(
+          chunk.map(async (item) => {
+            try {
+              if (item.mediaType === 'movie') {
+                const details = await tmdb.getMovieDetails(item.tmdbId);
+                if (details && isMounted) {
+                  const rt = details.runtime || 0;
+                  const rd = details.release_date || '';
+                  setRuntimesCache(prev => ({ ...prev, [item.tmdbId]: rt }));
+                  setReleaseDatesCache(prev => ({ ...prev, [item.tmdbId]: rd }));
+                }
+              } else {
+                const details = await tmdb.getShowDetails(item.tmdbId);
+                if (details && isMounted) {
+                  const rd = details.first_air_date || '';
+                  setReleaseDatesCache(prev => ({ ...prev, [item.tmdbId]: rd }));
+                }
+              }
+            } catch (e) {
+              console.log(`Failed to fetch metadata for ${item.mediaType} ${item.tmdbId}:`, e);
+              fetchedOrFetchingRef.current.delete(item.tmdbId);
+            }
+          })
+        );
+      }
+    }
+
+    fetchMetadata();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, currentList, runtimesCache, releaseDatesCache]);
 
   const handleAddAllMoviesToWatchlist = async () => {
     if (!currentList) return;
@@ -186,6 +254,41 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     return processed;
   };
 
+  const getProcessedCustomListItems = (items: any[]) => {
+    let processed = [...items];
+    if (customListFilterType !== 'all') {
+      processed = processed.filter(item => item.mediaType === customListFilterType);
+    }
+
+    if (customListSortOption === 'alpha') {
+      processed.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (customListSortOption === 'runtime') {
+      processed.sort((a, b) => {
+        const rtA = a.runtime || runtimesCache[a.tmdbId] || 0;
+        const rtB = b.runtime || runtimesCache[b.tmdbId] || 0;
+        return rtB - rtA; // longest runtime first
+      });
+    } else if (customListSortOption === 'release') {
+      processed.sort((a, b) => {
+        const dateA = a.releaseDate || releaseDatesCache[a.tmdbId] || '';
+        const dateB = b.releaseDate || releaseDatesCache[b.tmdbId] || '';
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return new Date(dateB).getTime() - new Date(dateA).getTime(); // newest first
+      });
+    } else {
+      // customListSortOption === 'added' or default
+      processed.sort((a, b) => {
+        const indexA = items.indexOf(a);
+        const indexB = items.indexOf(b);
+        const timeA = a.addedAt || indexA;
+        const timeB = b.addedAt || indexB;
+        return timeB - timeA; // newest added first
+      });
+    }
+    return processed;
+  };
+
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListName.trim()) return;
@@ -223,14 +326,30 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     if (alreadyExists) return;
 
     let runtime: number | undefined = undefined;
+    let releaseDate: string | undefined = tmdbItem.release_date || tmdbItem.first_air_date;
+
     if (determinedType === 'movie') {
       try {
         const details = await tmdb.getMovieDetails(tmdbItem.id);
-        if (details && details.runtime) {
-          runtime = details.runtime;
+        if (details) {
+          if (details.runtime) {
+            runtime = details.runtime;
+          }
+          if (details.release_date) {
+            releaseDate = details.release_date;
+          }
         }
       } catch (err) {
-        console.error('Failed to fetch movie runtime when adding to custom list:', err);
+        console.error('Failed to fetch movie details when adding to custom list:', err);
+      }
+    } else {
+      try {
+        const details = await tmdb.getShowDetails(tmdbItem.id);
+        if (details && details.first_air_date) {
+          releaseDate = details.first_air_date;
+        }
+      } catch (err) {
+        console.error('Failed to fetch TV details when adding to custom list:', err);
       }
     }
 
@@ -241,7 +360,9 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
         mediaType: determinedType,
         title: tmdbItem.title || tmdbItem.name || '',
         posterPath: tmdbItem.poster_path,
-        runtime
+        runtime,
+        releaseDate,
+        addedAt: Date.now()
       }
     ];
 
@@ -649,49 +770,160 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
               <p className="text-xs">This themed list is empty. Use the search input above to add catalog items!</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
-              {currentList.items.map((item) => (
-                <div 
-                  key={item.tmdbId}
-                  className="group relative cursor-pointer space-y-2.5"
-                >
-                  <div 
-                    onClick={() => onNavigate({ 
-                      type: item.mediaType === 'tv' ? 'show-details' : 'movie-details', 
-                      [item.mediaType === 'tv' ? 'showId' : 'movieId']: item.tmdbId 
-                    } as any)}
-                    className="relative aspect-poster rounded-2xl overflow-hidden bg-slate-900 shadow hover:shadow-md transition"
-                  >
-                    <img 
-                      src={getPosterUrl(item.posterPath, 'w342')} 
-                      alt={item.title}
-                      className="w-full h-full object-cover transition group-hover:scale-102"
-                      referrerPolicy="no-referrer"
-                      loading="lazy"
-                    />
-                  </div>
-
+            <div className="space-y-6">
+              {/* Filter and Sorting Row for Custom List */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card border border-border-custom p-4 rounded-2xl shadow-sm">
+                {/* Media Type Filter */}
+                <div className="flex gap-1 bg-background p-1 rounded-xl border border-border-custom w-fit">
                   <button
-                    onClick={() => removeItemFromCustomList(currentList, item.tmdbId, item.mediaType)}
-                    className="absolute top-2.5 right-2.5 bg-red-600/95 text-white p-1.5 rounded-full hover:bg-red-500 shadow transition opacity-0 group-hover:opacity-100"
-                    title="Remove from list"
+                    onClick={() => {
+                      setCustomListFilterType('all');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                      customListFilterType === 'all' ? 'bg-primary-custom text-white' : 'text-muted-custom hover:text-foreground'
+                    }`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    All
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCustomListFilterType('movie');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                      customListFilterType === 'movie' ? 'bg-primary-custom text-white' : 'text-muted-custom hover:text-foreground'
+                    }`}
+                  >
+                    <Film className="w-3 h-3" />
+                    <span>Movies</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCustomListFilterType('tv');
+                      if (customListSortOption === 'runtime' || customListSortOption === 'release') {
+                        setCustomListSortOption('added');
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                      customListFilterType === 'tv' ? 'bg-primary-custom text-white' : 'text-muted-custom hover:text-foreground'
+                    }`}
+                  >
+                    <Tv className="w-3 h-3" />
+                    <span>TV Shows</span>
+                  </button>
+                </div>
+
+                {/* Sorters: 
+                    - Movie Lists: alphabetical by name, runtime, release date.
+                    - TV Show Lists: alphabetical by name, date and time added to list. */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-muted-custom font-semibold">Sort by:</span>
+                  <button
+                    onClick={() => setCustomListSortOption('alpha')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                      customListSortOption === 'alpha'
+                        ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                        : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                    }`}
+                  >
+                    Alphabetical
                   </button>
 
-                  <div className="px-1 space-y-0.5">
-                    <h3 className="font-bold text-xs truncate text-foreground">{item.title}</h3>
-                    <div className="flex items-center justify-between gap-1.5 text-[10px]">
-                      <span className="text-muted-custom uppercase font-mono">{item.mediaType}</span>
-                      {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
-                        <span className="text-primary-custom font-semibold">
-                          {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
+                  {(customListFilterType === 'all' || customListFilterType === 'tv') && (
+                    <button
+                      onClick={() => setCustomListSortOption('added')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                        customListSortOption === 'added'
+                          ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                          : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                      }`}
+                    >
+                      Date Added
+                    </button>
+                  )}
+
+                  {(customListFilterType === 'all' || customListFilterType === 'movie') && (
+                    <>
+                      <button
+                        onClick={() => setCustomListSortOption('runtime')}
+                        className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                          customListSortOption === 'runtime'
+                            ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                            : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                        }`}
+                      >
+                        Runtime
+                      </button>
+                      <button
+                        onClick={() => setCustomListSortOption('release')}
+                        className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                          customListSortOption === 'release'
+                            ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                            : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                        }`}
+                      >
+                        Release Date
+                      </button>
+                    </>
+                  )}
                 </div>
-              ))}
+              </div>
+
+              {/* Grid or Empty results */}
+              {getProcessedCustomListItems(currentList.items).length === 0 ? (
+                <div className="py-12 text-center text-muted-custom bg-card border border-border-custom rounded-2xl p-6">
+                  <p className="text-xs">No matching titles found in this list.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
+                  {getProcessedCustomListItems(currentList.items).map((item) => (
+                    <div 
+                      key={item.tmdbId}
+                      className="group relative cursor-pointer space-y-2.5"
+                    >
+                      <div 
+                        onClick={() => onNavigate({ 
+                          type: item.mediaType === 'tv' ? 'show-details' : 'movie-details', 
+                          [item.mediaType === 'tv' ? 'showId' : 'movieId']: item.tmdbId 
+                        } as any)}
+                        className="relative aspect-poster rounded-2xl overflow-hidden bg-slate-900 shadow hover:shadow-md transition"
+                      >
+                        <img 
+                          src={getPosterUrl(item.posterPath, 'w342')} 
+                          alt={item.title}
+                          className="w-full h-full object-cover transition group-hover:scale-102"
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                        />
+                      </div>
+
+                      <button
+                        onClick={() => removeItemFromCustomList(currentList, item.tmdbId, item.mediaType)}
+                        className="absolute top-2.5 right-2.5 bg-red-600/95 text-white p-1.5 rounded-full hover:bg-red-500 shadow transition opacity-0 group-hover:opacity-100 animate-fadeIn"
+                        title="Remove from list"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="px-1 space-y-0.5">
+                        <h3 className="font-bold text-xs truncate text-foreground hover:text-primary-custom transition">{item.title}</h3>
+                        <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                          <span className="text-muted-custom uppercase font-mono">{item.mediaType === 'tv' ? 'TV' : 'Movie'}</span>
+                          {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
+                            <span className="text-primary-custom font-semibold">
+                              {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
+                            </span>
+                          ) : null}
+                        </div>
+                        {(item.releaseDate || releaseDatesCache[item.tmdbId]) && (
+                          <div className="text-[9px] text-muted-custom">
+                            Rel: {item.releaseDate || releaseDatesCache[item.tmdbId]}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

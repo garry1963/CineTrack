@@ -222,6 +222,8 @@ export interface CustomList {
     title: string;
     posterPath: string | null;
     runtime?: number;
+    releaseDate?: string;
+    addedAt?: number;
   }[];
   createdAt: number;
   order: number;
