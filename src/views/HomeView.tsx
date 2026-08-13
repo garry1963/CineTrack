@@ -538,12 +538,34 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
       {homeSections.map((sectionId) => {
         switch (sectionId) {
           case 'continue-watching': {
-            const activeProgress = showProgress.filter((prog) => {
-              const resolved = resolvedProgress[prog.showId];
-              const totalEps = resolved ? resolved.totalEpisodes : prog.totalEpisodesCount;
-              const watchedEps = resolved ? resolved.watchedEpisodesCount : prog.watchedEpisodesCount;
-              return totalEps === 0 || watchedEps < totalEps;
-            });
+            const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+
+            const activeProgress = showProgress
+              .map((prog) => {
+                const showWatchedEps = watchedEpisodes.filter(we => we.showId === prog.showId);
+                const latestEpWatchedAt = showWatchedEps.reduce(
+                  (max, we) => (we.watchedAt ? Math.max(max, we.watchedAt) : max),
+                  0
+                );
+                const lastActivity = Math.max(latestEpWatchedAt, prog.updatedAt || 0);
+                return { prog, lastActivity };
+              })
+              .filter(({ prog, lastActivity }) => {
+                const resolved = resolvedProgress[prog.showId];
+                const totalEps = resolved ? resolved.totalEpisodes : prog.totalEpisodesCount;
+                const watchedEps = resolved ? resolved.watchedEpisodesCount : prog.watchedEpisodesCount;
+
+                // 1. Must still have unwatched episodes
+                const hasUnwatched = totalEps === 0 || watchedEps < totalEps;
+                if (!hasUnwatched) return false;
+
+                // 2. Must have had an episode marked as watched within the last 10 days
+                return lastActivity > 0 && (now - lastActivity) <= TEN_DAYS_MS;
+              })
+              .sort((a, b) => b.lastActivity - a.lastActivity)
+              .map(({ prog }) => prog);
+
             if (activeProgress.length === 0) return null;
             return (
               <div key="continue-watching" className="space-y-4 animate-fade-in">
