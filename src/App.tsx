@@ -28,6 +28,7 @@ function Dashboard() {
     mergeSharedAccountData
   } = useCineTrack();
   const [currentView, setCurrentView] = useState<ViewState>({ type: 'home' });
+  const [viewHistory, setViewHistory] = useState<ViewState[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [serverHasTmdbKey, setServerHasTmdbKey] = useState<boolean | null>(null);
   const [merging, setMerging] = useState(false);
@@ -69,9 +70,38 @@ function Dashboard() {
   }, [settings?.theme]);
 
   const handleNavigate = (view: ViewState) => {
+    // Avoid pushing duplicate view if identical to currentView
+    const isSame = JSON.stringify(currentView) === JSON.stringify(view);
+    if (!isSame) {
+      setViewHistory((prev) => [...prev, currentView]);
+    }
     setCurrentView(view);
     // Smoothly scroll container back to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBack = () => {
+    if (viewHistory.length > 0) {
+      const prevView = viewHistory[viewHistory.length - 1];
+      setViewHistory((prev) => prev.slice(0, prev.length - 1));
+      setCurrentView(prevView);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Fallback hierarchy if no history exists (e.g. direct load)
+      if (currentView.type === 'episode-details') {
+        setCurrentView({
+          type: 'season-details',
+          showId: currentView.showId,
+          seasonNumber: currentView.seasonNumber,
+          showName: currentView.showName
+        });
+      } else if (currentView.type === 'season-details') {
+        setCurrentView({ type: 'show-details', showId: currentView.showId });
+      } else {
+        setCurrentView({ type: 'home' });
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleLogout = () => {
@@ -123,7 +153,7 @@ function Dashboard() {
       case 'movie-details':
       case 'season-details':
       case 'episode-details':
-        return <DetailsView currentView={currentView} onNavigate={handleNavigate} />;
+        return <DetailsView currentView={currentView} onNavigate={handleNavigate} onBack={handleBack} />;
       default:
         return <HomeView onNavigate={handleNavigate} />;
     }

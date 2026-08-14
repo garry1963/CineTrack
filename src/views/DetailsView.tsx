@@ -12,6 +12,7 @@ import {
 interface DetailsViewProps {
   currentView: ViewState;
   onNavigate: (view: ViewState) => void;
+  onBack?: () => void;
 }
 
 interface ListSelectorProps {
@@ -242,7 +243,7 @@ function ListSelector({
   );
 }
 
-export default function DetailsView({ currentView, onNavigate }: DetailsViewProps) {
+export default function DetailsView({ currentView, onNavigate, onBack }: DetailsViewProps) {
   const { 
     user,
     watchlist, 
@@ -312,6 +313,10 @@ export default function DetailsView({ currentView, onNavigate }: DetailsViewProp
   }, [currentView]);
 
   const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
     if (currentView.type === 'season-details') {
       onNavigate({ type: 'show-details', showId: currentView.showId });
     } else if (currentView.type === 'episode-details') {
