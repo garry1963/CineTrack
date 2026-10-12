@@ -76,6 +76,7 @@ interface CineTrackContextType {
   saveNote: (targetId: number | string, type: 'movie' | 'tv' | 'episode', content: string) => Promise<void>;
   saveCustomList: (list: Partial<CustomList>) => Promise<void>;
   deleteCustomList: (listId: string) => Promise<void>;
+  reorderCustomLists: (newOrderedLists: CustomList[]) => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
   
   isMovieWatched: (movieId: number) => boolean;
@@ -145,7 +146,9 @@ const defaultSettings: AppSettings = {
   posterQuality: 'w500',
   backdropQuality: 'w1280',
   autoSync: true,
-  cacheSize: '50MB'
+  cacheSize: '50MB',
+  enableCustomListSorting: true,
+  defaultCustomListSort: 'custom'
 };
 
 async function getShowWatchStats(showId: number, updatedWatchedEpisodes: WatchedEpisode[]) {
@@ -919,6 +922,30 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const reorderCustomLists = async (newOrderedLists: CustomList[]) => {
+    if (!user || isViewingShared) return;
+
+    const normalized = newOrderedLists.map((l, index) => ({
+      ...l,
+      order: index
+    }));
+
+    setCustomLists(normalized);
+    localStorage.setItem(`cinetrack_cache_${user.uid}_customLists`, JSON.stringify(normalized));
+
+    showNotification('List order saved successfully', 'success', 'Lists Reordered');
+
+    try {
+      const batch = writeBatch(db);
+      normalized.forEach(l => {
+        batch.set(doc(db, 'users', user.uid, 'custom_lists', l.id), l);
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('Firestore reorder batch error:', err);
+    }
+  };
+
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
@@ -1244,6 +1271,7 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       saveNote,
       saveCustomList,
       deleteCustomList,
+      reorderCustomLists,
       updateSettings,
       
       isMovieWatched,

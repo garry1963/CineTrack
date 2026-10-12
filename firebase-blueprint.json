@@ -119,7 +119,9 @@
         "description": { "type": "string" },
         "items": { "type": "array" },
         "order": { "type": "number" },
-        "createdAt": { "type": "number" }
+        "createdAt": { "type": "number" },
+        "sortMode": { "type": "string" },
+        "customSortingEnabled": { "type": "boolean" }
       },
       "required": ["id", "name", "items", "order"]
     },
@@ -131,7 +133,10 @@
         "theme": { "type": "string" },
         "language": { "type": "string" },
         "tmdbApiKey": { "type": "string" },
-        "homeSections": { "type": "array" }
+        "homeSections": { "type": "array" },
+        "bottomNavItems": { "type": "array" },
+        "enableCustomListSorting": { "type": "boolean" },
+        "defaultCustomListSort": { "type": "string" }
       }
     }
   },

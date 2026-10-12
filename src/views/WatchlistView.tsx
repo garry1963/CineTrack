@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { ViewState, CustomList } from '../types';
 import { getPosterUrl, formatRuntime } from '../lib/utils';
-import { Bookmark, Star, Trash2, Plus, X, List, Film, Tv, Heart, ClipboardList, Check, Sparkles } from 'lucide-react';
+import { 
+  Bookmark, Star, Trash2, Plus, X, List, Film, Tv, Heart, ClipboardList, Check, Sparkles,
+  ArrowUpDown, GripVertical, ListOrdered, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, 
+  ChevronsLeft, ChevronsRight, SlidersHorizontal, RotateCcw
+} from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 
 interface WatchlistViewProps {
@@ -15,6 +19,8 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     watchlist, 
     favorites, 
     customLists, 
+    settings,
+    reorderCustomLists,
     removeFromWatchlist, 
     toggleFavorite,
     saveCustomList,
@@ -33,7 +39,17 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
   const [runtimesCache, setRuntimesCache] = useState<Record<number, number>>({});
   const [releaseDatesCache, setReleaseDatesCache] = useState<Record<number, string>>({});
   const [customListFilterType, setCustomListFilterType] = useState<'all' | 'movie' | 'tv'>('all');
-  const [customListSortOption, setCustomListSortOption] = useState<'added' | 'alpha' | 'runtime' | 'release'>('added');
+  const [customListSortOption, setCustomListSortOption] = useState<'custom' | 'added' | 'alpha' | 'runtime' | 'release'>('custom');
+  const [isCustomReorderingMode, setIsCustomReorderingMode] = useState<boolean>(true);
+  const [draggedTmdbId, setDraggedTmdbId] = useState<number | null>(null);
+  const [dragOverTmdbId, setDragOverTmdbId] = useState<number | null>(null);
+
+  // Custom Lists Overview Sorting & Reordering State
+  const [listsSortOption, setListsSortOption] = useState<'order' | 'alpha' | 'created' | 'count'>('order');
+  const [isReorderingListsMode, setIsReorderingListsMode] = useState<boolean>(false);
+  const [draggedListId, setDraggedListId] = useState<string | null>(null);
+  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
+
   const [bulkAddFeedback, setBulkAddFeedback] = useState<string | null>(null);
   const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
 
@@ -254,13 +270,30 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
     return processed;
   };
 
+  // Sync sorting preference when a custom list is loaded
+  useEffect(() => {
+    if (currentList) {
+      if (currentList.sortMode) {
+        setCustomListSortOption(currentList.sortMode);
+      } else if (settings?.defaultCustomListSort) {
+        setCustomListSortOption(settings.defaultCustomListSort);
+      } else {
+        setCustomListSortOption('custom');
+      }
+      setIsCustomReorderingMode(currentList.customSortingEnabled ?? (settings?.enableCustomListSorting !== false));
+    }
+  }, [activeListId, currentList?.id]);
+
   const getProcessedCustomListItems = (items: any[]) => {
     let processed = [...items];
     if (customListFilterType !== 'all') {
       processed = processed.filter(item => item.mediaType === customListFilterType);
     }
 
-    if (customListSortOption === 'alpha') {
+    if (customListSortOption === 'custom') {
+      // In custom sorting mode, maintain exact list item order!
+      return processed;
+    } else if (customListSortOption === 'alpha') {
       processed.sort((a, b) => a.title.localeCompare(b.title));
     } else if (customListSortOption === 'runtime') {
       processed.sort((a, b) => {
@@ -287,6 +320,160 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
       });
     }
     return processed;
+  };
+
+  // Move individual item in custom list (arrows or top/bottom)
+  const handleMoveCustomListItem = async (tmdbId: number, mediaType: 'movie' | 'tv', direction: 'up' | 'down' | 'top' | 'bottom') => {
+    if (!currentList) return;
+    const items = [...currentList.items];
+    const currentIndex = items.findIndex(i => i.tmdbId === tmdbId && i.mediaType === mediaType);
+    if (currentIndex === -1) return;
+
+    let targetIndex = currentIndex;
+    if (direction === 'up') targetIndex = currentIndex - 1;
+    else if (direction === 'down') targetIndex = currentIndex + 1;
+    else if (direction === 'top') targetIndex = 0;
+    else if (direction === 'bottom') targetIndex = items.length - 1;
+
+    if (targetIndex < 0 || targetIndex >= items.length || targetIndex === currentIndex) return;
+
+    const [movedItem] = items.splice(currentIndex, 1);
+    items.splice(targetIndex, 0, movedItem);
+
+    await saveCustomList({
+      ...currentList,
+      items,
+      sortMode: 'custom',
+      customSortingEnabled: true
+    });
+    setCustomListSortOption('custom');
+    setBulkAddFeedback(`Updated position for "${movedItem.title}" (#${targetIndex + 1})`);
+    setTimeout(() => setBulkAddFeedback(null), 2500);
+  };
+
+  // Drag and drop reordering of item in custom list
+  const handleDropCustomListItem = async (sourceTmdbId: number, targetTmdbId: number) => {
+    if (!currentList || sourceTmdbId === targetTmdbId) return;
+    const items = [...currentList.items];
+    const sourceIndex = items.findIndex(i => i.tmdbId === sourceTmdbId);
+    const targetIndex = items.findIndex(i => i.tmdbId === targetTmdbId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [movedItem] = items.splice(sourceIndex, 1);
+    items.splice(targetIndex, 0, movedItem);
+
+    await saveCustomList({
+      ...currentList,
+      items,
+      sortMode: 'custom',
+      customSortingEnabled: true
+    });
+    setCustomListSortOption('custom');
+    setDraggedTmdbId(null);
+    setDragOverTmdbId(null);
+    setBulkAddFeedback(`Moved "${movedItem.title}" to position #${targetIndex + 1}`);
+    setTimeout(() => setBulkAddFeedback(null), 2500);
+  };
+
+  // Preset order initialization for custom list
+  const handleApplyPresetOrder = async (mode: 'release_asc' | 'release_desc' | 'alpha_asc' | 'reverse') => {
+    if (!currentList) return;
+    let items = [...currentList.items];
+    if (mode === 'release_asc') {
+      items.sort((a, b) => {
+        const dateA = a.releaseDate || releaseDatesCache[a.tmdbId] || '';
+        const dateB = b.releaseDate || releaseDatesCache[b.tmdbId] || '';
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return new Date(dateA).getTime() - new Date(dateB).getTime();
+      });
+    } else if (mode === 'release_desc') {
+      items.sort((a, b) => {
+        const dateA = a.releaseDate || releaseDatesCache[a.tmdbId] || '';
+        const dateB = b.releaseDate || releaseDatesCache[b.tmdbId] || '';
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
+    } else if (mode === 'alpha_asc') {
+      items.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (mode === 'reverse') {
+      items.reverse();
+    }
+
+    await saveCustomList({
+      ...currentList,
+      items,
+      sortMode: 'custom',
+      customSortingEnabled: true
+    });
+    setCustomListSortOption('custom');
+    setBulkAddFeedback("Custom order updated and saved!");
+    setTimeout(() => setBulkAddFeedback(null), 3000);
+  };
+
+  // Toggle custom sorting mode on the list
+  const handleToggleCustomSortingOnList = async () => {
+    if (!currentList) return;
+    const nextEnabled = !isCustomReorderingMode;
+    setIsCustomReorderingMode(nextEnabled);
+    if (nextEnabled) {
+      setCustomListSortOption('custom');
+    }
+    await saveCustomList({
+      ...currentList,
+      customSortingEnabled: nextEnabled,
+      sortMode: nextEnabled ? 'custom' : customListSortOption
+    });
+    setBulkAddFeedback(nextEnabled ? "Custom sorting enabled for this list" : "Custom sorting disabled");
+    setTimeout(() => setBulkAddFeedback(null), 2500);
+  };
+
+  // Custom Lists Overview Sorting
+  const getProcessedCustomLists = () => {
+    let lists = [...customLists];
+    if (listsSortOption === 'alpha') {
+      lists.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (listsSortOption === 'created') {
+      lists.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else if (listsSortOption === 'count') {
+      lists.sort((a, b) => b.items.length - a.items.length);
+    } else {
+      lists.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    }
+    return lists;
+  };
+
+  // Move custom list in overview
+  const handleMoveList = async (listId: string, direction: 'left' | 'right') => {
+    const lists = getProcessedCustomLists();
+    const currentIndex = lists.findIndex(l => l.id === listId);
+    if (currentIndex === -1) return;
+    const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= lists.length) return;
+
+    const [movedList] = lists.splice(currentIndex, 1);
+    lists.splice(targetIndex, 0, movedList);
+
+    await reorderCustomLists(lists);
+    setListsSortOption('order');
+  };
+
+  // Drop custom list in overview
+  const handleDropList = async (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const lists = getProcessedCustomLists();
+    const sourceIndex = lists.findIndex(l => l.id === sourceId);
+    const targetIndex = lists.findIndex(l => l.id === targetId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [movedList] = lists.splice(sourceIndex, 1);
+    lists.splice(targetIndex, 0, movedList);
+
+    await reorderCustomLists(lists);
+    setListsSortOption('order');
+    setDraggedListId(null);
+    setDragOverListId(null);
   };
 
   const handleCreateList = async (e: React.FormEvent) => {
@@ -585,15 +772,76 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
       {/* Rendering Custom Lists */}
       {activeTab === 'custom_lists' && !activeListId && (
         <div className="space-y-6">
-          {/* Header row to Add list */}
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="bg-primary-custom hover:bg-primary-custom/90 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-md flex items-center gap-1.5 transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Themed List</span>
-            </button>
+          {/* Header row with List Sorters, Reorder toggle & Add list */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border-custom p-4 rounded-2xl shadow-sm">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-custom font-semibold">Sort lists:</span>
+              <button
+                onClick={() => setListsSortOption('order')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                  listsSortOption === 'order'
+                    ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                Custom Order
+              </button>
+              <button
+                onClick={() => setListsSortOption('alpha')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                  listsSortOption === 'alpha'
+                    ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                Alphabetical
+              </button>
+              <button
+                onClick={() => setListsSortOption('created')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                  listsSortOption === 'created'
+                    ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                Recently Created
+              </button>
+              <button
+                onClick={() => setListsSortOption('count')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition border ${
+                  listsSortOption === 'count'
+                    ? 'bg-primary-custom/10 text-primary-custom border-primary-custom/25'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+              >
+                Most Titles
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setIsReorderingListsMode(!isReorderingListsMode);
+                  if (!isReorderingListsMode) setListsSortOption('order');
+                }}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs transition border flex items-center gap-1.5 ${
+                  isReorderingListsMode
+                    ? 'bg-primary-custom/15 border-primary-custom/40 text-primary-custom'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+                title="Rearrange your lists in your chosen custom order"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>{isReorderingListsMode ? 'Reordering: Active' : 'Custom Sort Lists'}</span>
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-primary-custom hover:bg-primary-custom/90 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl shadow-md flex items-center gap-1.5 transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Themed List</span>
+              </button>
+            </div>
           </div>
 
           {/* List display Cards */}
@@ -607,17 +855,48 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {customLists.map((list) => (
+              {getProcessedCustomLists().map((list, index) => (
                 <div
                   key={list.id}
+                  draggable={isReorderingListsMode}
+                  onDragStart={(e) => {
+                    setDraggedListId(list.id);
+                    e.dataTransfer.setData('text/plain', list.id);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedListId && draggedListId !== list.id) {
+                      setDragOverListId(list.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverListId === list.id) {
+                      setDragOverListId(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedListId && draggedListId !== list.id) {
+                      handleDropList(draggedListId, list.id);
+                    }
+                  }}
                   onClick={() => setActiveListId(list.id)}
-                  className="bg-card hover:bg-slate-800/10 border border-border-custom p-5 rounded-2xl cursor-pointer shadow-sm flex flex-col justify-between hover:scale-[1.01] transition relative group"
+                  className={`bg-card hover:bg-slate-800/10 border p-5 rounded-2xl cursor-pointer shadow-sm flex flex-col justify-between hover:scale-[1.01] transition relative group ${
+                    dragOverListId === list.id
+                      ? 'border-primary-custom ring-2 ring-primary-custom/40 scale-[1.02]'
+                      : 'border-border-custom'
+                  }`}
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between">
-                      <h3 className="font-display font-extrabold text-base text-foreground truncate max-w-[80%] group-hover:text-primary-custom transition">
-                        {list.name}
-                      </h3>
+                      <div className="flex items-center gap-2 max-w-[80%]">
+                        <span className="bg-background border border-border-custom text-[10px] font-mono font-bold text-primary-custom px-2 py-0.5 rounded-md shrink-0">
+                          #{index + 1}
+                        </span>
+                        <h3 className="font-display font-extrabold text-base text-foreground truncate group-hover:text-primary-custom transition">
+                          {list.name}
+                        </h3>
+                      </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -636,8 +915,48 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                     </p>
                   </div>
 
+                  {/* Reordering Controls if in custom list reorder mode */}
+                  {isReorderingListsMode && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="my-2 p-2 bg-background/80 border border-border-custom rounded-xl flex items-center justify-between text-xs"
+                    >
+                      <span className="text-[10px] font-semibold text-muted-custom flex items-center gap-1">
+                        <GripVertical className="w-3.5 h-3.5 text-primary-custom" />
+                        <span>Drag or move:</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => handleMoveList(list.id, 'left')}
+                          className="p-1 rounded-lg hover:bg-primary-custom/10 hover:text-primary-custom disabled:opacity-30 disabled:hover:bg-transparent text-muted-custom transition"
+                          title="Move list earlier"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === customLists.length - 1}
+                          onClick={() => handleMoveList(list.id, 'right')}
+                          className="p-1 rounded-lg hover:bg-primary-custom/10 hover:text-primary-custom disabled:opacity-30 disabled:hover:bg-transparent text-muted-custom transition"
+                          title="Move list later"
+                        >
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="pt-4 border-t border-border-custom flex items-center justify-between text-xs text-muted-custom font-semibold">
-                    <span>{list.items.length} titles</span>
+                    <span className="flex items-center gap-1.5">
+                      <span>{list.items.length} titles</span>
+                      {list.sortMode && (
+                        <span className="text-[10px] bg-background px-1.5 py-0.5 rounded border border-border-custom font-normal">
+                          {list.sortMode === 'custom' ? 'Custom' : list.sortMode}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-primary-custom group-hover:translate-x-1 transition flex items-center gap-1">
                       <span>Open list</span>
                       <Plus className="w-3.5 h-3.5 rotate-45" />
@@ -679,10 +998,31 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
           {/* List Meta Header & Add All Action */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border-custom p-5 rounded-3xl">
             <div className="space-y-1">
-              <h2 className="font-display font-extrabold text-2xl text-foreground">{currentList.name}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-display font-extrabold text-2xl text-foreground">{currentList.name}</h2>
+                {currentList.sortMode && (
+                  <span className="text-[10px] bg-primary-custom/10 text-primary-custom border border-primary-custom/25 font-bold px-2 py-0.5 rounded-md">
+                    Sort: {currentList.sortMode === 'custom' ? 'Custom Order' : currentList.sortMode}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-muted-custom leading-relaxed">{currentList.description || 'No description provided.'}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start sm:self-center">
+              {/* Option to Enable/Disable Custom Sorting for this List */}
+              <button
+                type="button"
+                onClick={handleToggleCustomSortingOnList}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition border flex items-center gap-2 cursor-pointer ${
+                  isCustomReorderingMode
+                    ? 'bg-primary-custom/15 border-primary-custom/40 text-primary-custom shadow-sm'
+                    : 'bg-card hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                }`}
+                title="Toggle custom manual sequence sorting for this list"
+              >
+                <ListOrdered className="w-4 h-4 text-primary-custom" />
+                <span>{isCustomReorderingMode ? 'Custom Sorting: Enabled' : 'Enable Custom Sorting'}</span>
+              </button>
               {currentList.items.some(item => item.mediaType === 'movie') && (
                 <button
                   onClick={handleAddAllMoviesToWatchlist}
@@ -812,11 +1152,25 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                   </button>
                 </div>
 
-                {/* Sorters: 
-                    - Movie Lists: alphabetical by name, runtime, release date.
-                    - TV Show Lists: alphabetical by name, date and time added to list. */}
+                {/* Sorters with Custom Order option */}
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
                   <span className="text-muted-custom font-semibold">Sort by:</span>
+
+                  {/* Custom Order button */}
+                  {(settings?.enableCustomListSorting !== false || isCustomReorderingMode) && (
+                    <button
+                      onClick={() => setCustomListSortOption('custom')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition border flex items-center gap-1.5 ${
+                        customListSortOption === 'custom'
+                          ? 'bg-primary-custom text-white border-primary-custom shadow-sm'
+                          : 'bg-background hover:bg-slate-800/10 border-border-custom text-muted-custom hover:text-foreground'
+                      }`}
+                    >
+                      <ListOrdered className="w-3.5 h-3.5" />
+                      <span>Custom Order</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => setCustomListSortOption('alpha')}
                     className={`px-3 py-1.5 rounded-xl font-bold transition border ${
@@ -868,6 +1222,43 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                 </div>
               </div>
 
+              {/* Custom Sorting Helper Bar */}
+              {(customListSortOption === 'custom' || isCustomReorderingMode) && (
+                <div className="bg-card/70 border border-primary-custom/30 rounded-2xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs animate-fadeIn">
+                  <div className="flex items-center gap-2 text-foreground font-semibold">
+                    <GripVertical className="w-4 h-4 text-primary-custom shrink-0" />
+                    <span>Custom Sorting Active: Drag cards or use the directional controls below each poster to curate your bespoke sequence.</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] text-muted-custom font-semibold">Auto-fill sequence:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPresetOrder('release_asc')}
+                      className="px-2.5 py-1 rounded-lg bg-background border border-border-custom hover:bg-slate-800/20 text-muted-custom hover:text-foreground transition text-[11px] font-semibold"
+                      title="Order chronologically by release date and save as custom sequence"
+                    >
+                      Chronological
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPresetOrder('alpha_asc')}
+                      className="px-2.5 py-1 rounded-lg bg-background border border-border-custom hover:bg-slate-800/20 text-muted-custom hover:text-foreground transition text-[11px] font-semibold"
+                      title="Order alphabetically (A-Z) and save as custom sequence"
+                    >
+                      A-Z
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPresetOrder('reverse')}
+                      className="px-2.5 py-1 rounded-lg bg-background border border-border-custom hover:bg-slate-800/20 text-muted-custom hover:text-foreground transition text-[11px] font-semibold"
+                      title="Reverse the current sequence"
+                    >
+                      Reverse
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Grid or Empty results */}
               {getProcessedCustomListItems(currentList.items).length === 0 ? (
                 <div className="py-12 text-center text-muted-custom bg-card border border-border-custom rounded-2xl p-6">
@@ -875,53 +1266,152 @@ export default function WatchlistView({ currentView, onNavigate }: WatchlistView
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
-                  {getProcessedCustomListItems(currentList.items).map((item) => (
-                    <div 
-                      key={item.tmdbId}
-                      className="group relative cursor-pointer space-y-2.5"
-                    >
+                  {getProcessedCustomListItems(currentList.items).map((item, index) => {
+                    const isCustomMode = customListSortOption === 'custom' || isCustomReorderingMode;
+                    const isBeingDragged = draggedTmdbId === item.tmdbId;
+                    const isDragOver = dragOverTmdbId === item.tmdbId;
+
+                    return (
                       <div 
-                        onClick={() => onNavigate({ 
-                          type: item.mediaType === 'tv' ? 'show-details' : 'movie-details', 
-                          [item.mediaType === 'tv' ? 'showId' : 'movieId']: item.tmdbId 
-                        } as any)}
-                        className="relative aspect-poster rounded-2xl overflow-hidden bg-slate-900 shadow hover:shadow-md transition"
+                        key={`${item.mediaType}_${item.tmdbId}`}
+                        draggable={isCustomMode}
+                        onDragStart={(e) => {
+                          setDraggedTmdbId(item.tmdbId);
+                          e.dataTransfer.setData('text/plain', item.tmdbId.toString());
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (draggedTmdbId && draggedTmdbId !== item.tmdbId) {
+                            setDragOverTmdbId(item.tmdbId);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverTmdbId === item.tmdbId) {
+                            setDragOverTmdbId(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedTmdbId && draggedTmdbId !== item.tmdbId) {
+                            handleDropCustomListItem(draggedTmdbId, item.tmdbId);
+                          }
+                        }}
+                        className={`group relative space-y-2 rounded-2xl transition ${
+                          isBeingDragged ? 'opacity-40 scale-95' : ''
+                        } ${
+                          isDragOver 
+                            ? 'ring-2 ring-primary-custom scale-102 bg-primary-custom/5 p-1' 
+                            : ''
+                        }`}
                       >
-                        <img 
-                          src={getPosterUrl(item.posterPath, 'w342')} 
-                          alt={item.title}
-                          className="w-full h-full object-cover transition group-hover:scale-102"
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                        />
-                      </div>
+                        {/* Poster Container */}
+                        <div 
+                          onClick={() => onNavigate({ 
+                            type: item.mediaType === 'tv' ? 'show-details' : 'movie-details', 
+                            [item.mediaType === 'tv' ? 'showId' : 'movieId']: item.tmdbId 
+                          } as any)}
+                          className="relative aspect-poster rounded-2xl overflow-hidden bg-slate-900 shadow hover:shadow-md transition cursor-pointer"
+                        >
+                          <img 
+                            src={getPosterUrl(item.posterPath, 'w342')} 
+                            alt={item.title}
+                            className="w-full h-full object-cover transition group-hover:scale-102"
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                          />
 
-                      <button
-                        onClick={() => removeItemFromCustomList(currentList, item.tmdbId, item.mediaType)}
-                        className="absolute top-2.5 right-2.5 bg-red-600/95 text-white p-1.5 rounded-full hover:bg-red-500 shadow transition opacity-0 group-hover:opacity-100 animate-fadeIn"
-                        title="Remove from list"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                          {/* Position Badge */}
+                          <div className="absolute top-2.5 left-2.5 bg-black/80 backdrop-blur-md border border-white/10 text-white font-mono font-bold text-[10px] px-2 py-0.5 rounded-lg shadow-md flex items-center gap-1 z-10">
+                            {isCustomMode && <GripVertical className="w-2.5 h-2.5 text-primary-custom" />}
+                            <span>#{index + 1}</span>
+                          </div>
 
-                      <div className="px-1 space-y-0.5">
-                        <h3 className="font-bold text-xs truncate text-foreground hover:text-primary-custom transition">{item.title}</h3>
-                        <div className="flex items-center justify-between gap-1.5 text-[10px]">
-                          <span className="text-muted-custom uppercase font-mono">{item.mediaType === 'tv' ? 'TV' : 'Movie'}</span>
-                          {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
-                            <span className="text-primary-custom font-semibold">
-                              {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
-                            </span>
-                          ) : null}
+                          {/* Remove button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeItemFromCustomList(currentList, item.tmdbId, item.mediaType);
+                            }}
+                            className="absolute top-2.5 right-2.5 bg-red-600/95 text-white p-1.5 rounded-full hover:bg-red-500 shadow transition opacity-0 group-hover:opacity-100 z-10"
+                            title="Remove from list"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        {(item.releaseDate || releaseDatesCache[item.tmdbId]) && (
-                          <div className="text-[9px] text-muted-custom">
-                            Rel: {item.releaseDate || releaseDatesCache[item.tmdbId]}
+
+                        {/* Reordering Controls Bar (Under Poster in Custom Mode) */}
+                        {isCustomMode && (
+                          <div className="bg-background/90 border border-border-custom p-1.5 rounded-xl flex items-center justify-between gap-1 shadow-xs">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => handleMoveCustomListItem(item.tmdbId, item.mediaType, 'top')}
+                              className="p-1 rounded hover:bg-primary-custom/10 hover:text-primary-custom text-muted-custom disabled:opacity-20 transition"
+                              title="Move to Top"
+                            >
+                              <ChevronsLeft className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => handleMoveCustomListItem(item.tmdbId, item.mediaType, 'up')}
+                              className="p-1 rounded hover:bg-primary-custom/10 hover:text-primary-custom text-muted-custom disabled:opacity-20 transition"
+                              title="Move Earlier"
+                            >
+                              <ArrowLeft className="w-3 h-3" />
+                            </button>
+                            <span className="text-[10px] font-mono font-bold text-muted-custom">
+                              #{index + 1}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={index === currentList.items.length - 1}
+                              onClick={() => handleMoveCustomListItem(item.tmdbId, item.mediaType, 'down')}
+                              className="p-1 rounded hover:bg-primary-custom/10 hover:text-primary-custom text-muted-custom disabled:opacity-20 transition"
+                              title="Move Later"
+                            >
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === currentList.items.length - 1}
+                              onClick={() => handleMoveCustomListItem(item.tmdbId, item.mediaType, 'bottom')}
+                              className="p-1 rounded hover:bg-primary-custom/10 hover:text-primary-custom text-muted-custom disabled:opacity-20 transition"
+                              title="Move to Bottom"
+                            >
+                              <ChevronsRight className="w-3 h-3" />
+                            </button>
                           </div>
                         )}
+
+                        {/* Meta information */}
+                        <div className="px-1 space-y-0.5">
+                          <h3 
+                            onClick={() => onNavigate({ 
+                              type: item.mediaType === 'tv' ? 'show-details' : 'movie-details', 
+                              [item.mediaType === 'tv' ? 'showId' : 'movieId']: item.tmdbId 
+                            } as any)}
+                            className="font-bold text-xs truncate text-foreground hover:text-primary-custom transition cursor-pointer"
+                          >
+                            {item.title}
+                          </h3>
+                          <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                            <span className="text-muted-custom uppercase font-mono">{item.mediaType === 'tv' ? 'TV' : 'Movie'}</span>
+                            {item.mediaType === 'movie' && (item.runtime || runtimesCache[item.tmdbId]) ? (
+                              <span className="text-primary-custom font-semibold">
+                                {formatRuntime(item.runtime || runtimesCache[item.tmdbId])}
+                              </span>
+                            ) : null}
+                          </div>
+                          {(item.releaseDate || releaseDatesCache[item.tmdbId]) && (
+                            <div className="text-[9px] text-muted-custom">
+                              Rel: {item.releaseDate || releaseDatesCache[item.tmdbId]}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

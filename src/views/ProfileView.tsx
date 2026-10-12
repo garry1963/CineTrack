@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { auth, signOut, db, doc, setDoc } from '../firebase';
 import { AppSettings, ThemeMode, ViewState } from '../types';
-import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2 } from 'lucide-react';
+import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2, ListOrdered, ArrowUpDown } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { transformPassword } from '../lib/utils';
 
@@ -483,6 +483,61 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
                 );
               })}
             </div>
+          </div>
+
+          {/* User List Custom Sorting Settings */}
+          <div className="space-y-3 pt-4 border-t border-border-custom/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <ListOrdered className="w-3.5 h-3.5 text-primary-custom" />
+                  <span>User List Custom Sorting</span>
+                </label>
+                <p className="text-[10px] text-muted-custom leading-normal">
+                  Enable custom sequence sorting, drag-and-drop reordering, and bespoke ordering of titles inside your themed lists.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateSettings({ 
+                  enableCustomListSorting: settings.enableCustomListSorting === false ? true : false 
+                })}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  settings.enableCustomListSorting !== false ? 'bg-primary-custom' : 'bg-slate-700'
+                }`}
+                role="switch"
+                aria-checked={settings.enableCustomListSorting !== false}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    settings.enableCustomListSorting !== false ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {settings.enableCustomListSorting !== false && (
+              <div className="space-y-1.5 pt-1 bg-background/50 border border-border-custom/60 rounded-xl p-3">
+                <label className="text-xs font-semibold text-muted-custom flex items-center gap-1.5">
+                  <ArrowUpDown className="w-3 h-3 text-primary-custom" />
+                  <span>Default Custom List Sorting Mode</span>
+                </label>
+                <select
+                  value={settings.defaultCustomListSort || 'custom'}
+                  onChange={(e) => updateSettings({ defaultCustomListSort: e.target.value as any })}
+                  className="w-full bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-medium text-foreground outline-none focus:border-primary-custom"
+                >
+                  <option value="custom">Custom Order (Manual Curation)</option>
+                  <option value="added">Date Added (Newest First)</option>
+                  <option value="alpha">Alphabetical (A - Z)</option>
+                  <option value="release">Release Date (Newest to Oldest)</option>
+                  <option value="runtime">Runtime (Longest to Shortest)</option>
+                </select>
+                <p className="text-[10px] text-muted-custom">
+                  Determines the initial sorting view when opening any user-created list.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Custom TMDB API Key for Standalone Mode */}

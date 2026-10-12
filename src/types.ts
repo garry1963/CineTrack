@@ -21,9 +21,12 @@ export interface AppSettings {
   posterQuality: 'w342' | 'w500' | 'original';
   backdropQuality: 'w780' | 'w1280' | 'original';
   autoSync: boolean;
-  cacheSize: string; // e.g. "50MB"
+  cacheSize?: string;
   tmdbApiKey?: string;
   homeSections?: string[];
+  bottomNavItems?: string[];
+  enableCustomListSorting?: boolean;
+  defaultCustomListSort?: 'custom' | 'added' | 'alpha' | 'runtime' | 'release';
 }
 
 // TMDB Standard Structures
@@ -227,6 +230,8 @@ export interface CustomList {
   }[];
   createdAt: number;
   order: number;
+  sortMode?: 'custom' | 'added' | 'alpha' | 'runtime' | 'release';
+  customSortingEnabled?: boolean;
 }
 
 export interface ToastNotification {
