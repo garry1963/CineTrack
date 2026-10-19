@@ -2,9 +2,10 @@ import React, { useRef, useState } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { auth, signOut, db, doc, setDoc } from '../firebase';
 import { AppSettings, ThemeMode, ViewState } from '../types';
-import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2, ListOrdered, ArrowUpDown } from 'lucide-react';
+import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2, ListOrdered, ArrowUpDown, Tv, Globe, Server, Activity, ExternalLink } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { transformPassword } from '../lib/utils';
+import { tvmaze } from '../services/tvmaze';
 
 export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewState) => void }) {
   const { 
@@ -33,6 +34,26 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  // TVmaze Secure Connection Test
+  const [testingTvmaze, setTestingTvmaze] = useState(false);
+  const [tvmazeStatus, setTvmazeStatus] = useState<{ ok: boolean; message: string; latencyMs?: number } | null>(null);
+
+  const handleTestTvmaze = async () => {
+    setTestingTvmaze(true);
+    setTvmazeStatus(null);
+    try {
+      const res = await tvmaze.testConnection();
+      setTvmazeStatus(res);
+    } catch (err: any) {
+      setTvmazeStatus({
+        ok: false,
+        message: err.message || 'TVmaze test failed'
+      });
+    } finally {
+      setTestingTvmaze(false);
+    }
+  };
 
   // Account Deletion States
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -536,6 +557,153 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
                 <p className="text-[10px] text-muted-custom">
                   Determines the initial sorting view when opening any user-created list.
                 </p>
+              </div>
+            )}
+          </div>
+
+          {/* TV Show Metadata Provider (TMDB vs TVmaze.com) */}
+          <div className="space-y-3 pt-4 border-t border-border-custom/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <Tv className="w-3.5 h-3.5 text-primary-custom" />
+                  <span>TV Show Metadata Provider</span>
+                </label>
+                <p className="text-[10px] text-muted-custom leading-normal">
+                  Select your primary catalog provider for TV series, season episodes, and air schedules.
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                settings.tvMetadataProvider === 'tvmaze'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-primary-custom/10 text-primary-custom border-primary-custom/30'
+              }`}>
+                {settings.tvMetadataProvider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}
+              </span>
+            </div>
+
+            {/* Provider Options Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {/* TMDB Option */}
+              <button
+                type="button"
+                onClick={() => updateSettings({ tvMetadataProvider: 'tmdb' })}
+                className={`p-3 rounded-2xl border text-left transition relative cursor-pointer ${
+                  (settings.tvMetadataProvider || 'tmdb') === 'tmdb'
+                    ? 'bg-primary-custom/10 border-primary-custom/50 shadow-sm shadow-primary-custom/10'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom/70 text-muted-custom hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Globe className={`w-4 h-4 ${
+                      (settings.tvMetadataProvider || 'tmdb') === 'tmdb' ? 'text-primary-custom' : 'text-muted-custom'
+                    }`} />
+                    <span className="text-xs font-bold text-foreground">TMDB</span>
+                  </div>
+                  {(settings.tvMetadataProvider || 'tmdb') === 'tmdb' && (
+                    <span className="w-4 h-4 rounded-full bg-primary-custom text-white flex items-center justify-center text-[10px]">
+                      <Check className="w-2.5 h-2.5 stroke-[3px]" />
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-custom leading-relaxed">
+                  The Movie Database. Comprehensive TV and movie catalog with trailer previews and community ratings.
+                </p>
+              </button>
+
+              {/* TVmaze Option */}
+              <button
+                type="button"
+                onClick={() => updateSettings({ tvMetadataProvider: 'tvmaze' })}
+                className={`p-3 rounded-2xl border text-left transition relative cursor-pointer ${
+                  settings.tvMetadataProvider === 'tvmaze'
+                    ? 'bg-emerald-500/10 border-emerald-500/50 shadow-sm shadow-emerald-500/10'
+                    : 'bg-background hover:bg-slate-800/10 border-border-custom/70 text-muted-custom hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Tv className={`w-4 h-4 ${
+                      settings.tvMetadataProvider === 'tvmaze' ? 'text-emerald-400' : 'text-muted-custom'
+                    }`} />
+                    <span className="text-xs font-bold text-foreground">TVmaze.com</span>
+                  </div>
+                  {settings.tvMetadataProvider === 'tvmaze' && (
+                    <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px]">
+                      <Check className="w-2.5 h-2.5 stroke-[3px]" />
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-custom leading-relaxed">
+                  Dedicated television metadata encyclopedia with detailed episode guides, air dates, and cast lists.
+                </p>
+              </button>
+            </div>
+
+            {/* TVmaze Secure Configuration Card (visible when TVmaze is active or custom key is set) */}
+            {settings.tvMetadataProvider === 'tvmaze' && (
+              <div className="p-3.5 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl space-y-3 mt-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                      <Shield className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <span>Secure Server Proxy Integration</span>
+                        <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-300">
+                          /api/tvmaze
+                        </span>
+                      </h5>
+                      <p className="text-[10px] text-muted-custom">
+                        Requests are routed through CineTrack's server-side proxy with caching & sanitization to secure your traffic.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Test Connection Button */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-emerald-500/20">
+                  <button
+                    type="button"
+                    onClick={handleTestTvmaze}
+                    disabled={testingTvmaze}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                  >
+                    <Activity className={`w-3.5 h-3.5 ${testingTvmaze ? 'animate-spin' : ''}`} />
+                    <span>{testingTvmaze ? 'Testing Proxy...' : 'Test TVmaze Connection'}</span>
+                  </button>
+
+                  {tvmazeStatus && (
+                    <div className={`text-xs px-2.5 py-1 rounded-xl flex items-center gap-1.5 font-medium ${
+                      tvmazeStatus.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                    }`}>
+                      {tvmazeStatus.ok ? <Check className="w-3 h-3 stroke-[3px]" /> : null}
+                      <span>{tvmazeStatus.message}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional TVmaze API Key Input */}
+                <div className="space-y-1 pt-2 border-t border-emerald-500/20">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-muted-custom uppercase tracking-wider">
+                      TVmaze User API Key (Optional)
+                    </label>
+                    <span className="text-[9px] text-muted-custom">For Custom Rate Tiers</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Enter custom TVmaze API key/token (optional)..."
+                    value={settings.tvmazeApiKey || ''}
+                    onChange={(e) => updateSettings({ tvmazeApiKey: e.target.value.trim() })}
+                    className="w-full bg-background border border-border-custom px-3 py-2 rounded-xl text-xs font-mono text-foreground outline-none focus:border-emerald-500/50 transition-colors"
+                  />
+                  <p className="text-[10px] text-muted-custom">
+                    Not required for standard usage. Keys are transmitted securely via backend HTTPS proxy headers without exposing secrets.
+                  </p>
+                </div>
               </div>
             )}
           </div>

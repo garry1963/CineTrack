@@ -246,6 +246,12 @@ export default function SearchView({ onNavigate }: SearchViewProps) {
                     referrerPolicy="no-referrer"
                     loading="lazy"
                   />
+                  {item.metadata_source === 'tvmaze' && (
+                    <div className="absolute top-2.5 left-2.5 bg-emerald-950/85 backdrop-blur-sm border border-emerald-500/40 px-2 py-0.5 rounded-lg text-[9px] font-bold text-emerald-300 flex items-center gap-1 shadow-sm">
+                      <Tv className="w-2.5 h-2.5" />
+                      <span>TVmaze</span>
+                    </div>
+                  )}
                   {!isPerson && item.vote_average && (
                     <div className="absolute top-2.5 right-2.5 bg-black/75 backdrop-blur-sm px-2 py-0.5 rounded-lg text-[10px] font-bold text-amber-500 flex items-center gap-0.5 shadow-sm">
                       <Star className="w-3 h-3 fill-current" />
@@ -271,7 +277,7 @@ export default function SearchView({ onNavigate }: SearchViewProps) {
               <Search className="w-12 h-12 mx-auto text-slate-700" />
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Type a query to search</p>
-                <p className="text-xs">Find films, series, actors, and other content across TMDB library.</p>
+                <p className="text-xs">Find films, series, actors, and episodes across TMDB & TVmaze libraries.</p>
               </div>
             </div>
           )}

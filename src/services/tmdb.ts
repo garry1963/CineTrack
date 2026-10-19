@@ -1,4 +1,23 @@
 import { TMDBMedia, TMDBSeason, TMDBEpisode } from '../types';
+import { tvmaze, setRuntimeTvmazeApiKey } from './tvmaze';
+
+export { tvmaze, setRuntimeTvmazeApiKey };
+
+let runtimeTvProvider: 'tmdb' | 'tvmaze' = 'tmdb';
+
+export function setRuntimeTvProvider(provider: 'tmdb' | 'tvmaze') {
+  runtimeTvProvider = provider;
+}
+
+export function getRuntimeTvProvider(): 'tmdb' | 'tvmaze' {
+  return runtimeTvProvider;
+}
+
+let activeTmdbApiKey: string | null = null;
+
+export function setRuntimeTmdbApiKey(key: string | null) {
+  activeTmdbApiKey = key;
+}
 
 async function fetchDirectTMDB<T = any>(
   path: string,
@@ -19,12 +38,6 @@ async function fetchDirectTMDB<T = any>(
     throw new Error(`Direct TMDB API returned status ${response.status}: ${errText}`);
   }
   return response.json() as Promise<T>;
-}
-
-let activeTmdbApiKey: string | null = null;
-
-export function setRuntimeTmdbApiKey(key: string | null) {
-  activeTmdbApiKey = key;
 }
 
 export async function fetchFromTMDB<T = any>(
@@ -104,31 +117,128 @@ export const tmdb = {
     return fetchFromTMDB('/movie/upcoming', { page });
   },
 
-  getAiringTodayTV: (page = 1) => {
+  getAiringTodayTV: async (page = 1) => {
+    if (runtimeTvProvider === 'tvmaze') {
+      try {
+        const shows = await tvmaze.getAiringToday();
+        if (shows.length > 0) {
+          return { results: shows, page: 1, total_pages: 1, total_results: shows.length };
+        }
+      } catch (err) {
+        console.warn('TVmaze getAiringToday failed, falling back to TMDB:', err);
+      }
+    }
     return fetchFromTMDB('/tv/airing_today', { page });
   },
 
-  getOnTheAirTV: (page = 1) => {
+  getOnTheAirTV: async (page = 1) => {
+    if (runtimeTvProvider === 'tvmaze') {
+      try {
+        const shows = await tvmaze.getPopularShows(page - 1);
+        if (shows.length > 0) {
+          return { results: shows, page, total_pages: 10, total_results: 100 };
+        }
+      } catch (err) {
+        console.warn('TVmaze getOnTheAirTV failed, falling back to TMDB:', err);
+      }
+    }
     return fetchFromTMDB('/tv/on_the_air', { page });
   },
 
-  getShowDetails: (id: number): Promise<TMDBMedia> => {
-    return fetchFromTMDB(`/tv/${id}`, { append_to_response: 'credits,videos,recommendations,similar' });
+  getShowDetails: async (id: number, forceProvider?: 'tmdb' | 'tvmaze'): Promise<TMDBMedia> => {
+    const useTvmaze = forceProvider === 'tvmaze' || (forceProvider !== 'tmdb' && runtimeTvProvider === 'tvmaze');
+    if (useTvmaze) {
+      try {
+        const show = await tvmaze.getShowDetails(id);
+        if (show) return show;
+      } catch (err) {
+        console.warn(`TVmaze getShowDetails for show ${id} failed, falling back to TMDB:`, err);
+      }
+    }
+    try {
+      const show = await fetchFromTMDB<TMDBMedia>(`/tv/${id}`, { append_to_response: 'credits,videos,recommendations,similar' });
+      show.metadata_source = 'tmdb';
+      return show;
+    } catch (err) {
+      if (!useTvmaze) {
+        try {
+          return await tvmaze.getShowDetails(id);
+        } catch {}
+      }
+      throw err;
+    }
   },
 
   getMovieDetails: (id: number): Promise<TMDBMedia> => {
     return fetchFromTMDB(`/movie/${id}`, { append_to_response: 'credits,videos,recommendations,similar' });
   },
 
-  getSeasonDetails: (showId: number, seasonNumber: number): Promise<TMDBSeason> => {
-    return fetchFromTMDB(`/tv/${showId}/season/${seasonNumber}`);
+  getSeasonDetails: async (showId: number, seasonNumber: number, forceProvider?: 'tmdb' | 'tvmaze'): Promise<TMDBSeason> => {
+    const useTvmaze = forceProvider === 'tvmaze' || (forceProvider !== 'tmdb' && runtimeTvProvider === 'tvmaze');
+    if (useTvmaze) {
+      try {
+        return await tvmaze.getSeasonDetails(showId, seasonNumber);
+      } catch (err) {
+        console.warn(`TVmaze getSeasonDetails failed for ${showId} S${seasonNumber}, falling back to TMDB:`, err);
+      }
+    }
+    try {
+      return await fetchFromTMDB(`/tv/${showId}/season/${seasonNumber}`);
+    } catch (err) {
+      if (!useTvmaze) {
+        try {
+          return await tvmaze.getSeasonDetails(showId, seasonNumber);
+        } catch {}
+      }
+      throw err;
+    }
   },
 
-  getEpisodeDetails: (showId: number, seasonNumber: number, episodeNumber: number): Promise<TMDBEpisode> => {
-    return fetchFromTMDB(`/tv/${showId}/season/${seasonNumber}/episode/${episodeNumber}`);
+  getEpisodeDetails: async (showId: number, seasonNumber: number, episodeNumber: number, forceProvider?: 'tmdb' | 'tvmaze'): Promise<TMDBEpisode> => {
+    const useTvmaze = forceProvider === 'tvmaze' || (forceProvider !== 'tmdb' && runtimeTvProvider === 'tvmaze');
+    if (useTvmaze) {
+      try {
+        return await tvmaze.getEpisodeDetails(showId, seasonNumber, episodeNumber);
+      } catch (err) {
+        console.warn(`TVmaze getEpisodeDetails failed for ${showId} S${seasonNumber}E${episodeNumber}, falling back to TMDB:`, err);
+      }
+    }
+    try {
+      return await fetchFromTMDB(`/tv/${showId}/season/${seasonNumber}/episode/${episodeNumber}`);
+    } catch (err) {
+      if (!useTvmaze) {
+        try {
+          return await tvmaze.getEpisodeDetails(showId, seasonNumber, episodeNumber);
+        } catch {}
+      }
+      throw err;
+    }
   },
 
-  searchMulti: (queryText: string, page = 1) => {
+  searchMulti: async (queryText: string, page = 1) => {
+    if (runtimeTvProvider === 'tvmaze') {
+      try {
+        const [tmdbResult, tvmazeShows] = await Promise.allSettled([
+          fetchFromTMDB('/search/multi', { query: queryText, page }),
+          tvmaze.searchShows(queryText)
+        ]);
+
+        const tmdbData = tmdbResult.status === 'fulfilled' ? tmdbResult.value : { results: [] };
+        const tvmazeList = tvmazeShows.status === 'fulfilled' ? tvmazeShows.value : [];
+
+        // Movies & Persons from TMDB
+        const nonTvItems = (tmdbData.results || []).filter((item: any) => item.media_type !== 'tv');
+
+        return {
+          page,
+          results: [...tvmazeList, ...nonTvItems],
+          total_pages: tmdbData.total_pages || 1,
+          total_results: (tmdbData.total_results || 0) + tvmazeList.length
+        };
+      } catch (err) {
+        console.warn('TVmaze multi-search failed, falling back to TMDB:', err);
+      }
+    }
     return fetchFromTMDB('/search/multi', { query: queryText, page });
   },
 

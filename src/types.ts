@@ -23,6 +23,8 @@ export interface AppSettings {
   autoSync: boolean;
   cacheSize?: string;
   tmdbApiKey?: string;
+  tvMetadataProvider?: 'tmdb' | 'tvmaze';
+  tvmazeApiKey?: string;
   homeSections?: string[];
   bottomNavItems?: string[];
   enableCustomListSorting?: boolean;
@@ -38,7 +40,7 @@ export interface Genre {
 export interface Network {
   id: number;
   name: string;
-  logo_path: string | null;
+  logo_path?: string | null;
 }
 
 export interface CastMember {
@@ -73,6 +75,13 @@ export interface TMDBMedia {
   poster_path: string | null;
   backdrop_path: string | null;
   media_type?: 'movie' | 'tv';
+  metadata_source?: 'tmdb' | 'tvmaze';
+  tvmaze_id?: number;
+  official_site?: string;
+  schedule?: {
+    time?: string;
+    days?: string[];
+  };
   release_date?: string; // Movie
   first_air_date?: string; // TV Show
   vote_average: number;
@@ -140,6 +149,7 @@ export interface TMDBEpisode {
   air_date: string | null;
   still_path: string | null;
   vote_average: number;
+  vote_count?: number;
   runtime: number | null;
   guest_stars?: CastMember[];
   crew?: CrewMember[];

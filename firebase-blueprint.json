@@ -133,6 +133,8 @@
         "theme": { "type": "string" },
         "language": { "type": "string" },
         "tmdbApiKey": { "type": "string" },
+        "tvMetadataProvider": { "type": "string" },
+        "tvmazeApiKey": { "type": "string" },
         "homeSections": { "type": "array" },
         "bottomNavItems": { "type": "array" },
         "enableCustomListSorting": { "type": "boolean" },

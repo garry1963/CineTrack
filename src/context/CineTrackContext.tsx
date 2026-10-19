@@ -32,7 +32,7 @@ import {
   TMDBMedia,
   ToastNotification
 } from '../types';
-import { setRuntimeTmdbApiKey, tmdb } from '../services/tmdb';
+import { setRuntimeTmdbApiKey, setRuntimeTvProvider, setRuntimeTvmazeApiKey, tmdb } from '../services/tmdb';
 
 export interface LocalUser {
   uid: string;
@@ -147,6 +147,7 @@ const defaultSettings: AppSettings = {
   backdropQuality: 'w1280',
   autoSync: true,
   cacheSize: '50MB',
+  tvMetadataProvider: 'tmdb',
   enableCustomListSorting: true,
   defaultCustomListSort: 'custom'
 };
@@ -287,9 +288,13 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(cachedSettings);
         setSettings({ ...defaultSettings, ...parsed });
         setRuntimeTmdbApiKey(parsed.tmdbApiKey || null);
+        setRuntimeTvProvider(parsed.tvMetadataProvider || 'tmdb');
+        setRuntimeTvmazeApiKey(parsed.tvmazeApiKey || null);
       } else {
         setSettings(defaultSettings);
         setRuntimeTmdbApiKey(null);
+        setRuntimeTvProvider('tmdb');
+        setRuntimeTvmazeApiKey(null);
       }
     } catch (e) {
       console.error('Error loading local cache:', e);
@@ -460,12 +465,16 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
         const mergedSettings = { ...defaultSettings, ...loadedSettings };
         setSettings(mergedSettings);
         setRuntimeTmdbApiKey(loadedSettings.tmdbApiKey || null);
+        setRuntimeTvProvider(loadedSettings.tvMetadataProvider || 'tmdb');
+        setRuntimeTvmazeApiKey(loadedSettings.tvmazeApiKey || null);
         if (!isViewingShared) {
           localStorage.setItem(`cinetrack_cache_${userId}_settings`, JSON.stringify(mergedSettings));
         }
       } else {
         setSettings(defaultSettings);
         setRuntimeTmdbApiKey(null);
+        setRuntimeTvProvider('tmdb');
+        setRuntimeTvmazeApiKey(null);
         if (!isViewingShared) {
           localStorage.setItem(`cinetrack_cache_${userId}_settings`, JSON.stringify(defaultSettings));
         }
@@ -953,6 +962,12 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     if (newSettings.tmdbApiKey !== undefined) {
       setRuntimeTmdbApiKey(newSettings.tmdbApiKey || null);
     }
+    if (newSettings.tvMetadataProvider !== undefined) {
+      setRuntimeTvProvider(newSettings.tvMetadataProvider);
+    }
+    if (newSettings.tvmazeApiKey !== undefined) {
+      setRuntimeTvmazeApiKey(newSettings.tvmazeApiKey || null);
+    }
 
     if (user && !isViewingShared) {
       localStorage.setItem(`cinetrack_cache_${user.uid}_settings`, JSON.stringify(updated));
@@ -998,6 +1013,8 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     setCustomLists([]);
     setSettings(defaultSettings);
     setRuntimeTmdbApiKey(null);
+    setRuntimeTvProvider('tmdb');
+    setRuntimeTvmazeApiKey(null);
   };
 
   const deleteUserAccount = async () => {

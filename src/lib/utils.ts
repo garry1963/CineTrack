@@ -2,10 +2,26 @@ export function cn(...classes: (string | undefined | null | boolean)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
+export function stripHtml(html?: string | null): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, '') // remove HTML tags
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
 export function getPosterUrl(path: string | null, size: string = 'w500'): string {
   if (!path) {
     // Return a beautiful elegant placeholder SVG data URI or simple gradient
     return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="%231e293b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="20" fill="%2364748b">No Poster Available</text></svg>`;
+  }
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
   }
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }
@@ -13,6 +29,9 @@ export function getPosterUrl(path: string | null, size: string = 'w500'): string
 export function getBackdropUrl(path: string | null, size: string = 'w1280'): string {
   if (!path) {
     return '';
+  }
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
   }
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }

@@ -6,7 +6,7 @@ import { getPosterUrl, getBackdropUrl, formatDate, formatCurrency, formatRuntime
 import { 
   Star, Bookmark, Heart, ChevronLeft, Calendar, 
   Clock, Landmark, Play, Sparkles, Check, ChevronRight, PenTool, Edit3, X, Tv,
-  Plus, List, Shield, CheckSquare
+  Plus, List, Shield, CheckSquare, ExternalLink
 } from 'lucide-react';
 
 interface DetailsViewProps {
@@ -676,6 +676,14 @@ export default function DetailsView({ currentView, onNavigate, onBack }: Details
               {media.vote_average > 0 && (
                 <span className="flex items-center gap-1 text-amber-500 font-bold"><Star className="w-4 h-4 fill-current" /> {media.vote_average.toFixed(1)} / 10</span>
               )}
+              <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full text-[10px] border ${
+                media.metadata_source === 'tvmaze'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-primary-custom/20 text-primary-custom border-primary-custom/40'
+              }`}>
+                <Tv className="w-3 h-3" />
+                <span>{media.metadata_source === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -860,6 +868,37 @@ export default function DetailsView({ currentView, onNavigate, onBack }: Details
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 border-t border-border-custom items-center">
+                <span className="text-muted-custom">Data Source</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                  media.metadata_source === 'tvmaze'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-primary-custom/10 text-primary-custom border-primary-custom/30'
+                }`}>
+                  {media.metadata_source === 'tvmaze' ? 'TVmaze.com' : 'TMDB API'}
+                </span>
+              </div>
+              {media.schedule && media.schedule.days && media.schedule.days.length > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-custom">Broadcast</span>
+                  <span className="font-semibold text-foreground text-right text-[11px]">
+                    {media.schedule.days.join(', ')} {media.schedule.time ? `@ ${media.schedule.time}` : ''}
+                  </span>
+                </div>
+              )}
+              {media.official_site && (
+                <div className="pt-2 border-t border-border-custom">
+                  <a 
+                    href={media.official_site} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-xs text-primary-custom hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <span>Official Website</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
               )}
             </div>
