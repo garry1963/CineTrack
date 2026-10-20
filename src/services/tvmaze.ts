@@ -181,8 +181,38 @@ export function mapTVmazeShowToTMDB(show: any): TMDBMedia {
       id: show.webChannel.id,
       name: show.webChannel.name,
       logo_path: null
-    }] : [])
-  };
+    }] : []),
+    next_episode_to_air: (() => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const rawNext = show._embedded?.nextepisode || rawEpisodes.find((ep: any) => ep.airdate && ep.airdate >= todayStr);
+      if (!rawNext) return null;
+      return {
+        id: rawNext.id,
+        name: rawNext.name || `Episode ${rawNext.number}`,
+        overview: stripHtml(rawNext.summary),
+        air_date: rawNext.airdate || null,
+        episode_number: rawNext.number,
+        season_number: rawNext.season,
+        still_path: rawNext.image?.original || rawNext.image?.medium || null,
+        vote_average: rawNext.rating?.average || 0
+      };
+    })(),
+    last_episode_to_air: (() => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const rawPrev = show._embedded?.previousepisode || [...rawEpisodes].reverse().find((ep: any) => ep.airdate && ep.airdate < todayStr);
+      if (!rawPrev) return null;
+      return {
+        id: rawPrev.id,
+        name: rawPrev.name || `Episode ${rawPrev.number}`,
+        overview: stripHtml(rawPrev.summary),
+        air_date: rawPrev.airdate || null,
+        episode_number: rawPrev.number,
+        season_number: rawPrev.season,
+        still_path: rawPrev.image?.original || rawPrev.image?.medium || null,
+        vote_average: rawPrev.rating?.average || 0
+      };
+    })()
+  } as TMDBMedia;
 }
 
 /**
@@ -207,23 +237,87 @@ export const tvmaze = {
   },
 
   /**
-   * Fetch full show details with embedded seasons, episodes, and cast
+   * Fetch full show details with embedded seasons, episodes, cast, and next/prev airings
    */
-  getShowDetails: async (showId: number): Promise<TMDBMedia> => {
-    const data = await fetchFromTVmaze<any>(`/shows/${showId}`, {
-      'embed[]': ['seasons', 'episodes', 'cast']
-    });
+  getShowDetails: async (showId: number, expectedTitle?: string): Promise<TMDBMedia> => {
+    let data: any = null;
+
+    // 1. Try direct ID lookup first
+    if (showId) {
+      try {
+        data = await fetchFromTVmaze<any>(`/shows/${showId}`, {
+          'embed[]': ['seasons', 'episodes', 'cast', 'nextepisode', 'previousepisode']
+        });
+        // Check if show name matches expected title if provided
+        if (expectedTitle && data && data.name) {
+          const normA = data.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normE = expectedTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (normA !== normE && !normA.includes(normE) && !normE.includes(normA)) {
+            // Discard mismatched ID (e.g. TMDB ID passed to TVmaze)
+            data = null;
+          }
+        }
+      } catch {
+        data = null;
+      }
+    }
+
+    // 2. If direct lookup failed or title mismatched, search by title
+    if (!data && expectedTitle) {
+      try {
+        data = await fetchFromTVmaze<any>('/singlesearch/shows', {
+          q: expectedTitle,
+          'embed[]': ['seasons', 'episodes', 'cast', 'nextepisode', 'previousepisode']
+        });
+      } catch {
+        data = null;
+      }
+    }
+
+    if (!data) {
+      throw new Error(`TVmaze show not found for ID ${showId}${expectedTitle ? ` ("${expectedTitle}")` : ''}`);
+    }
+
     return mapTVmazeShowToTMDB(data);
   },
 
   /**
    * Fetch season details with all episodes for that season
    */
-  getSeasonDetails: async (showId: number, seasonNumber: number): Promise<TMDBSeason> => {
-    // Fetch show with episodes and seasons
-    const show = await fetchFromTVmaze<any>(`/shows/${showId}`, {
-      'embed[]': ['seasons', 'episodes']
-    });
+  getSeasonDetails: async (showId: number, seasonNumber: number, expectedTitle?: string): Promise<TMDBSeason> => {
+    let show: any = null;
+
+    if (showId) {
+      try {
+        show = await fetchFromTVmaze<any>(`/shows/${showId}`, {
+          'embed[]': ['seasons', 'episodes']
+        });
+        if (expectedTitle && show && show.name) {
+          const normA = show.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normE = expectedTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (normA !== normE && !normA.includes(normE) && !normE.includes(normA)) {
+            show = null;
+          }
+        }
+      } catch {
+        show = null;
+      }
+    }
+
+    if (!show && expectedTitle) {
+      try {
+        show = await fetchFromTVmaze<any>('/singlesearch/shows', {
+          q: expectedTitle,
+          'embed[]': ['seasons', 'episodes']
+        });
+      } catch {
+        show = null;
+      }
+    }
+
+    if (!show) {
+      throw new Error(`TVmaze season not found for show ID ${showId}${expectedTitle ? ` ("${expectedTitle}")` : ''}`);
+    }
 
     const seasons = show._embedded?.seasons || [];
     const episodes = show._embedded?.episodes || [];
@@ -266,11 +360,37 @@ export const tvmaze = {
   /**
    * Fetch specific episode by season and episode number
    */
-  getEpisodeDetails: async (showId: number, seasonNumber: number, episodeNumber: number): Promise<TMDBEpisode> => {
-    const ep = await fetchFromTVmaze<any>(`/shows/${showId}/episodebynumber`, {
-      season: seasonNumber,
-      number: episodeNumber
-    });
+  getEpisodeDetails: async (showId: number, seasonNumber: number, episodeNumber: number, expectedTitle?: string): Promise<TMDBEpisode> => {
+    let ep: any = null;
+
+    if (showId) {
+      try {
+        ep = await fetchFromTVmaze<any>(`/shows/${showId}/episodebynumber`, {
+          season: seasonNumber,
+          number: episodeNumber
+        });
+      } catch {
+        ep = null;
+      }
+    }
+
+    if (!ep && expectedTitle) {
+      try {
+        const show = await fetchFromTVmaze<any>('/singlesearch/shows', { q: expectedTitle });
+        if (show && show.id) {
+          ep = await fetchFromTVmaze<any>(`/shows/${show.id}/episodebynumber`, {
+            season: seasonNumber,
+            number: episodeNumber
+          });
+        }
+      } catch {
+        ep = null;
+      }
+    }
+
+    if (!ep) {
+      throw new Error(`TVmaze episode not found for S${seasonNumber}E${episodeNumber}`);
+    }
 
     return {
       id: ep.id,

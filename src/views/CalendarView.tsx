@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { tmdb } from '../services/tmdb';
 import { ViewState } from '../types';
 import { getPosterUrl, formatDate, getEpisodeCode } from '../lib/utils';
-import { Calendar, Tv, Bell, Clock, X, Check, Loader2 } from 'lucide-react';
+import { 
+  Calendar, Tv, Bell, Clock, X, Check, Loader2, Globe, Shield, RefreshCw, ExternalLink 
+} from 'lucide-react';
 import { useCineTrack } from '../context/CineTrackContext';
 
 interface TVShowScheduleItem {
@@ -10,6 +12,7 @@ interface TVShowScheduleItem {
   title: string;
   posterPath: string | null;
   status?: string;
+  metadataSource?: 'tmdb' | 'tvmaze';
   nextEpisode?: {
     air_date: string | null;
     episode_number: number;
@@ -27,12 +30,28 @@ interface TVShowScheduleItem {
   numberOfSeasons?: number;
   numberOfEpisodes?: number;
   networks?: { name: string }[];
+  schedule?: {
+    time?: string;
+    days?: string[];
+  };
 }
 
 export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewState) => void }) {
-  const { watchlist, isEpisodeWatched, toggleEpisodeWatched, isViewingShared } = useCineTrack();
+  const { 
+    watchlist, 
+    isEpisodeWatched, 
+    toggleEpisodeWatched, 
+    isViewingShared,
+    settings,
+    updateSettings,
+    showNotification
+  } = useCineTrack();
+
+  const activeProvider = settings.tvMetadataProvider || 'tmdb';
+
   const [scheduleList, setScheduleList] = useState<TVShowScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [switchingProvider, setSwitchingProvider] = useState(false);
 
   // States for Episode Release Dates Modal
   const [selectedShowForEpisodes, setSelectedShowForEpisodes] = useState<TVShowScheduleItem | null>(null);
@@ -40,6 +59,7 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
   const [seasonEpisodes, setSeasonEpisodes] = useState<any[]>([]);
   const [seasonLoading, setSeasonLoading] = useState(false);
   const [seasonError, setSeasonError] = useState<string | null>(null);
+  const [modalFilter, setModalFilter] = useState<'upcoming' | 'all'>('upcoming');
 
   const getEpisodeStatus = (airDateStr: string | null) => {
     if (!airDateStr) return 'TBA';
@@ -65,18 +85,23 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
       setSeasonLoading(true);
       setSeasonError(null);
       try {
-        const details = await tmdb.getSeasonDetails(selectedShowForEpisodes.tmdbId, activeSeasonNumber);
+        const details = await tmdb.getSeasonDetails(
+          selectedShowForEpisodes!.tmdbId, 
+          activeSeasonNumber,
+          activeProvider,
+          selectedShowForEpisodes!.title
+        );
         setSeasonEpisodes(details.episodes || []);
       } catch (err) {
         console.error('Error fetching season episodes:', err);
-        setSeasonError('Failed to load episodes for this season.');
+        setSeasonError(`Failed to load episodes for this season from ${activeProvider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}.`);
       } finally {
         setSeasonLoading(false);
       }
     }
 
     loadSeasonEpisodes();
-  }, [selectedShowForEpisodes, activeSeasonNumber]);
+  }, [selectedShowForEpisodes, activeSeasonNumber, activeProvider]);
 
   const tvWatchlist = watchlist.filter(w => w.mediaType === 'tv');
 
@@ -92,17 +117,19 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
       try {
         const promises = tvWatchlist.map(async (item) => {
           try {
-            const details = await tmdb.getShowDetails(item.tmdbId);
+            const details = await tmdb.getShowDetails(item.tmdbId, activeProvider, item.title);
             return {
               tmdbId: item.tmdbId,
               title: item.title,
               posterPath: item.posterPath,
               status: details.status,
+              metadataSource: details.metadata_source || activeProvider,
               nextEpisode: (details as any).next_episode_to_air || null,
               lastEpisode: (details as any).last_episode_to_air || null,
               numberOfSeasons: details.number_of_seasons,
               numberOfEpisodes: details.number_of_episodes,
-              networks: details.networks || []
+              networks: details.networks || [],
+              schedule: (details as any).schedule || undefined
             };
           } catch (err) {
             console.log(`Failed to fetch details for TV Show ${item.tmdbId}:`, err);
@@ -111,6 +138,7 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
               title: item.title,
               posterPath: item.posterPath,
               status: 'Unknown',
+              metadataSource: activeProvider,
               nextEpisode: null,
               lastEpisode: null,
             };
@@ -144,30 +172,93 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
         console.log('Error loading TV release schedules:', e);
       } finally {
         setLoading(false);
+        setSwitchingProvider(false);
       }
     }
 
     loadTVReleaseSchedules();
-  }, [watchlist]);
+  }, [watchlist, activeProvider]);
+
+  const handleProviderChange = async (provider: 'tmdb' | 'tvmaze') => {
+    if (provider === activeProvider) return;
+    setSwitchingProvider(true);
+    await updateSettings({ tvMetadataProvider: provider });
+    showNotification(
+      `Automated Release Tracking switched to ${provider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}.`,
+      'info',
+      'Metadata Provider'
+    );
+  };
 
   return (
-    <div className="space-y-6 pb-16">
-      {/* Title */}
-      <div className="space-y-1">
-        <h1 className="font-display font-extrabold text-2xl tracking-tight text-foreground">
-          TV Release Schedule
-        </h1>
-        <p className="text-sm text-muted-custom">
-          Stay updated with upcoming episode release dates and recent airings for shows in your watchlist
-        </p>
+    <div className="space-y-6 pb-16 animate-fade-in">
+      {/* Header and Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="font-display font-extrabold text-2xl tracking-tight text-foreground flex items-center gap-2">
+            <span>TV Release Schedule</span>
+            {activeProvider === 'tvmaze' ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Shield className="w-3 h-3" />
+                <span>TVmaze.com Engine</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary-custom/10 text-primary-custom border border-primary-custom/20">
+                <Globe className="w-3 h-3" />
+                <span>TMDB Engine</span>
+              </span>
+            )}
+          </h1>
+          <p className="text-sm text-muted-custom">
+            Automated Release Tracking for TV series in your watchlist using your selected metadata provider
+          </p>
+        </div>
+
+        {/* TV Metadata Provider Selector for Automated Release Tracking */}
+        <div className="flex items-center gap-2 bg-card border border-border-custom p-1.5 rounded-2xl shrink-0 shadow-sm">
+          <span className="text-[11px] font-bold text-muted-custom pl-2 hidden md:inline">
+            Release Tracking:
+          </span>
+          <div className="flex items-center gap-1 bg-background rounded-xl p-0.5 border border-border-custom/50">
+            <button
+              type="button"
+              onClick={() => handleProviderChange('tmdb')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeProvider === 'tmdb'
+                  ? 'bg-primary-custom text-white shadow-sm'
+                  : 'text-muted-custom hover:text-foreground hover:bg-slate-800/20'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>TMDB</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleProviderChange('tvmaze')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeProvider === 'tvmaze'
+                  ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/20'
+                  : 'text-muted-custom hover:text-foreground hover:bg-slate-800/20'
+              }`}
+            >
+              <Tv className="w-3.5 h-3.5" />
+              <span>TVmaze.com</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="flex-1 flex items-center justify-center min-h-[40vh]">
+      {loading || switchingProvider ? (
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[40vh] space-y-3">
           <div className="relative w-14 h-14">
-            <div className="absolute inset-0 rounded-full border-4 border-primary-custom/20 border-t-primary-custom animate-spin" />
+            <div className={`absolute inset-0 rounded-full border-4 ${
+              activeProvider === 'tvmaze' ? 'border-emerald-500/20 border-t-emerald-500' : 'border-primary-custom/20 border-t-primary-custom'
+            } animate-spin`} />
             <div className="absolute inset-2 rounded-full border-4 border-indigo-500/10 border-b-indigo-500 animate-spin" style={{ animationDirection: 'reverse' }} />
           </div>
+          <p className="text-xs text-muted-custom font-medium animate-pulse">
+            Scanning {activeProvider === 'tvmaze' ? 'TVmaze.com API' : 'TMDB API'} for confirmed upcoming air dates...
+          </p>
         </div>
       ) : tvWatchlist.length === 0 ? (
         <div className="py-16 text-center text-muted-custom bg-card border border-dashed border-border-custom rounded-3xl p-6 max-w-2xl mx-auto space-y-4">
@@ -189,20 +280,38 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
         <div className="py-16 text-center text-muted-custom bg-card border border-dashed border-border-custom rounded-3xl p-6 max-w-2xl mx-auto space-y-4 animate-fade-in">
           <Calendar className="w-12 h-12 mx-auto text-slate-700" />
           <div className="space-y-1">
-            <h3 className="font-bold text-sm text-foreground">No Upcoming Confirmed Release Dates</h3>
-            <p className="text-xs text-muted-custom">
-              There are no upcoming episode release dates currently scheduled for the TV shows in your watchlist. We'll automatically update this view when new episode dates are confirmed!
+            <h3 className="font-bold text-sm text-foreground">No Upcoming Confirmed Release Dates Found</h3>
+            <p className="text-xs text-muted-custom max-w-md mx-auto">
+              There are no upcoming episode release dates currently confirmed for the TV shows in your watchlist by {activeProvider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}. You can try toggling between TMDB and TVmaze.com above, or check back soon as release calendars update constantly!
             </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => handleProviderChange(activeProvider === 'tvmaze' ? 'tmdb' : 'tvmaze')}
+              className="px-4 py-2 bg-card hover:bg-slate-800/30 border border-border-custom rounded-xl text-xs font-semibold text-foreground transition cursor-pointer flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-primary-custom" />
+              <span>Switch to {activeProvider === 'tvmaze' ? 'TMDB' : 'TVmaze.com'}</span>
+            </button>
+            <button
+              onClick={() => onNavigate({ type: 'discover' })}
+              className="bg-primary-custom hover:bg-primary-custom/90 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer"
+            >
+              Discover More TV Shows
+            </button>
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {scheduleList.map((show) => {
             const networkName = show.networks && show.networks.length > 0 ? show.networks[0].name : '';
+            const scheduleTime = show.schedule?.time;
+            const scheduleDays = show.schedule?.days && show.schedule.days.length > 0 ? show.schedule.days.join(', ') : '';
+
             return (
               <div
                 key={show.tmdbId}
-                className="bg-card border border-border-custom rounded-3xl p-4 flex gap-4 hover:scale-[1.01] hover:border-primary-custom/40 transition duration-300 shadow-sm group"
+                className="bg-card border border-border-custom rounded-3xl p-4 flex gap-4 hover:scale-[1.01] hover:border-primary-custom/40 transition duration-300 shadow-sm group relative"
               >
                 {/* Image Tile (Poster) */}
                 <div 
@@ -224,16 +333,28 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                 {/* Info and Release Details */}
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                   <div className="space-y-1.5">
-                    {/* Header tags */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[9px] font-extrabold bg-primary-custom/10 text-primary-custom border border-primary-custom/15 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                        {show.status || 'Unknown'}
-                      </span>
-                      {networkName && (
-                        <span className="text-[9px] font-bold text-muted-custom bg-slate-800/40 px-2 py-0.5 rounded-md truncate max-w-[120px]">
-                          {networkName}
+                    {/* Header tags and provider source badge */}
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] font-extrabold bg-primary-custom/10 text-primary-custom border border-primary-custom/15 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                          {show.status || 'Unknown'}
                         </span>
-                      )}
+                        {networkName && (
+                          <span className="text-[9px] font-bold text-muted-custom bg-slate-800/40 px-2 py-0.5 rounded-md truncate max-w-[120px]">
+                            {networkName}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Provider Badge */}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 ${
+                        show.metadataSource === 'tvmaze'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : 'bg-primary-custom/10 text-primary-custom border-primary-custom/20'
+                      }`}>
+                        {show.metadataSource === 'tvmaze' ? <Tv className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}
+                        <span>{show.metadataSource === 'tvmaze' ? 'TVmaze' : 'TMDB'}</span>
+                      </span>
                     </div>
 
                     <h3 
@@ -243,6 +364,16 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                     >
                       {show.title}
                     </h3>
+
+                    {/* Broadcast Time / Schedule if provided by TVmaze */}
+                    {(scheduleTime || scheduleDays) && (
+                      <div className="text-[10px] text-muted-custom flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="truncate">
+                          Airs {scheduleDays ? scheduleDays : ''} {scheduleTime ? `at ${scheduleTime}` : ''}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Relevant Episode release date information */}
                     <div className="space-y-2 mt-1">
@@ -315,15 +446,36 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
         </div>
       )}
 
-      {/* Reminder Notification Box */}
-      <div className="bg-primary-custom/5 border border-primary-custom/10 p-5 rounded-3xl flex gap-4 items-center">
-        <div className="w-10 h-10 bg-primary-custom/15 text-primary-custom rounded-2xl flex items-center justify-center shrink-0">
-          <Bell className="w-5 h-5" />
+      {/* Dynamic Automated Release Tracking Provider Box */}
+      <div className={`border p-5 rounded-3xl flex gap-4 items-center ${
+        activeProvider === 'tvmaze'
+          ? 'bg-emerald-950/20 border-emerald-500/20'
+          : 'bg-primary-custom/5 border-primary-custom/10'
+      }`}>
+        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+          activeProvider === 'tvmaze'
+            ? 'bg-emerald-500/20 text-emerald-400'
+            : 'bg-primary-custom/15 text-primary-custom'
+        }`}>
+          {activeProvider === 'tvmaze' ? <Shield className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
         </div>
-        <div className="space-y-0.5">
-          <h4 className="text-sm font-bold text-foreground">Automated Release Tracking</h4>
+        <div className="space-y-0.5 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-bold text-foreground">
+              Automated Release Tracking ({activeProvider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'})
+            </h4>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              activeProvider === 'tvmaze'
+                ? 'bg-emerald-500/20 text-emerald-300'
+                : 'bg-primary-custom/20 text-primary-custom'
+            }`}>
+              Active Metadata Provider
+            </span>
+          </div>
           <p className="text-xs text-muted-custom leading-relaxed">
-            Your schedule continuously scans TMDB to update airtimes and episode information automatically.
+            {activeProvider === 'tvmaze'
+              ? "Your calendar schedule continuously scans TVmaze.com's comprehensive television database via CineTrack's secure server proxy to automatically update airtimes, episode guides, and network schedules."
+              : "Your calendar schedule continuously scans TMDB to update airtimes, season episode numbers, and upcoming release dates automatically."}
           </p>
         </div>
       </div>
@@ -350,16 +502,25 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                   />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-display font-extrabold text-base text-foreground leading-tight">
-                    {selectedShowForEpisodes.title}
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display font-extrabold text-base text-foreground leading-tight">
+                      {selectedShowForEpisodes.title}
+                    </h3>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                      activeProvider === 'tvmaze'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-primary-custom/10 text-primary-custom border-primary-custom/20'
+                    }`}>
+                      {activeProvider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}
+                    </span>
+                  </div>
                   <p className="text-xs text-muted-custom">
                     Episode Release Schedule
                   </p>
                   
-                  {/* Season Selector */}
-                  <div className="pt-1.5 flex items-center gap-2">
-                    <span className="text-xs text-slate-400 font-medium">Select Season:</span>
+                  {/* Season Selector & View Filter */}
+                  <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400 font-medium">Season:</span>
                     <select
                       value={activeSeasonNumber}
                       onChange={(e) => setActiveSeasonNumber(Number(e.target.value))}
@@ -371,6 +532,28 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                         </option>
                       ))}
                     </select>
+
+                    {/* Filter toggle: upcoming vs all */}
+                    <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setModalFilter('upcoming')}
+                        className={`px-2 py-1 rounded-md font-bold transition cursor-pointer ${
+                          modalFilter === 'upcoming' ? 'bg-primary-custom text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Upcoming
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalFilter('all')}
+                        className={`px-2 py-1 rounded-md font-bold transition cursor-pointer ${
+                          modalFilter === 'all' ? 'bg-primary-custom text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        All Episodes
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -387,14 +570,15 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
               {seasonLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-3">
                   <Loader2 className="w-8 h-8 text-primary-custom animate-spin" />
-                  <p className="text-xs text-muted-custom animate-pulse">Retrieving episode release dates...</p>
+                  <p className="text-xs text-muted-custom animate-pulse">
+                    Retrieving episode release dates from {activeProvider === 'tvmaze' ? 'TVmaze.com' : 'TMDB'}...
+                  </p>
                 </div>
               ) : seasonError ? (
                 <div className="text-center py-12 text-red-500 space-y-2">
                   <p className="text-sm font-bold">{seasonError}</p>
                   <button
                     onClick={() => {
-                      // Trigger state change to reload
                       const current = activeSeasonNumber;
                       setActiveSeasonNumber(0);
                       setTimeout(() => setActiveSeasonNumber(current), 50);
@@ -404,29 +588,42 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                     Try Again
                   </button>
                 </div>
-              ) : seasonEpisodes.filter((ep) => {
-                if (!ep.air_date) return false;
+              ) : (() => {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                const airDate = new Date(ep.air_date);
-                airDate.setHours(0, 0, 0, 0);
-                return airDate.getTime() >= today.getTime();
-              }).length === 0 ? (
-                <div className="text-center py-12 text-muted-custom text-xs">
-                  No upcoming episodes scheduled for Season {activeSeasonNumber}.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {seasonEpisodes
-                    .filter((ep) => {
-                      if (!ep.air_date) return false;
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const airDate = new Date(ep.air_date);
-                      airDate.setHours(0, 0, 0, 0);
-                      return airDate.getTime() >= today.getTime();
-                    })
-                    .map((ep) => {
+
+                const displayedEpisodes = seasonEpisodes.filter((ep) => {
+                  if (modalFilter === 'all') return true;
+                  if (!ep.air_date) return false;
+                  const airDate = new Date(ep.air_date);
+                  airDate.setHours(0, 0, 0, 0);
+                  return airDate.getTime() >= today.getTime();
+                });
+
+                if (displayedEpisodes.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-muted-custom text-xs space-y-2">
+                      <p>
+                        {modalFilter === 'upcoming'
+                          ? `No upcoming episodes currently scheduled for Season ${activeSeasonNumber}.`
+                          : `No episode records found for Season ${activeSeasonNumber}.`}
+                      </p>
+                      {modalFilter === 'upcoming' && seasonEpisodes.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setModalFilter('all')}
+                          className="text-primary-custom font-semibold hover:underline"
+                        >
+                          View past aired episodes ({seasonEpisodes.length})
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {displayedEpisodes.map((ep) => {
                       const status = getEpisodeStatus(ep.air_date);
                       const watched = isEpisodeWatched(selectedShowForEpisodes.tmdbId, activeSeasonNumber, ep.episode_number);
                       
@@ -506,14 +703,17 @@ export default function CalendarView({ onNavigate }: { onNavigate: (view: ViewSt
                         </div>
                       );
                     })}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
             <div className="p-4 bg-slate-900/20 border-t border-border-custom text-center">
               <p className="text-[10px] text-muted-custom">
-                Note: Episode details and release dates are sourced from TMDB and updated dynamically.
+                {activeProvider === 'tvmaze'
+                  ? 'Note: Episode details and release dates are sourced from TVmaze.com via secure server proxy and updated dynamically.'
+                  : 'Note: Episode details and release dates are sourced from TMDB and updated dynamically.'}
               </p>
             </div>
           </div>

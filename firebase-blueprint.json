@@ -52,6 +52,7 @@
         "totalEpisodesCount": { "type": "number" },
         "lastWatchedSeason": { "type": "number" },
         "lastWatchedEpisode": { "type": "number" },
+        "dismissedFromContinueWatching": { "type": "boolean" },
         "updatedAt": { "type": "number" }
       },
       "required": ["showId", "title", "watchedEpisodesCount", "totalEpisodesCount"]
@@ -138,7 +139,8 @@
         "homeSections": { "type": "array" },
         "bottomNavItems": { "type": "array" },
         "enableCustomListSorting": { "type": "boolean" },
-        "defaultCustomListSort": { "type": "string" }
+        "defaultCustomListSort": { "type": "string" },
+        "dismissedContinueWatching": { "type": "array" }
       }
     }
   },

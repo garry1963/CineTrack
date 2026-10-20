@@ -145,11 +145,11 @@ export const tmdb = {
     return fetchFromTMDB('/tv/on_the_air', { page });
   },
 
-  getShowDetails: async (id: number, forceProvider?: 'tmdb' | 'tvmaze'): Promise<TMDBMedia> => {
+  getShowDetails: async (id: number, forceProvider?: 'tmdb' | 'tvmaze', expectedTitle?: string): Promise<TMDBMedia> => {
     const useTvmaze = forceProvider === 'tvmaze' || (forceProvider !== 'tmdb' && runtimeTvProvider === 'tvmaze');
     if (useTvmaze) {
       try {
-        const show = await tvmaze.getShowDetails(id);
+        const show = await tvmaze.getShowDetails(id, expectedTitle);
         if (show) return show;
       } catch (err) {
         console.warn(`TVmaze getShowDetails for show ${id} failed, falling back to TMDB:`, err);
@@ -162,7 +162,7 @@ export const tmdb = {
     } catch (err) {
       if (!useTvmaze) {
         try {
-          return await tvmaze.getShowDetails(id);
+          return await tvmaze.getShowDetails(id, expectedTitle);
         } catch {}
       }
       throw err;
@@ -173,11 +173,11 @@ export const tmdb = {
     return fetchFromTMDB(`/movie/${id}`, { append_to_response: 'credits,videos,recommendations,similar' });
   },
 
-  getSeasonDetails: async (showId: number, seasonNumber: number, forceProvider?: 'tmdb' | 'tvmaze'): Promise<TMDBSeason> => {
+  getSeasonDetails: async (showId: number, seasonNumber: number, forceProvider?: 'tmdb' | 'tvmaze', expectedTitle?: string): Promise<TMDBSeason> => {
     const useTvmaze = forceProvider === 'tvmaze' || (forceProvider !== 'tmdb' && runtimeTvProvider === 'tvmaze');
     if (useTvmaze) {
       try {
-        return await tvmaze.getSeasonDetails(showId, seasonNumber);
+        return await tvmaze.getSeasonDetails(showId, seasonNumber, expectedTitle);
       } catch (err) {
         console.warn(`TVmaze getSeasonDetails failed for ${showId} S${seasonNumber}, falling back to TMDB:`, err);
       }
@@ -187,18 +187,18 @@ export const tmdb = {
     } catch (err) {
       if (!useTvmaze) {
         try {
-          return await tvmaze.getSeasonDetails(showId, seasonNumber);
+          return await tvmaze.getSeasonDetails(showId, seasonNumber, expectedTitle);
         } catch {}
       }
       throw err;
     }
   },
 
-  getEpisodeDetails: async (showId: number, seasonNumber: number, episodeNumber: number, forceProvider?: 'tmdb' | 'tvmaze'): Promise<TMDBEpisode> => {
+  getEpisodeDetails: async (showId: number, seasonNumber: number, episodeNumber: number, forceProvider?: 'tmdb' | 'tvmaze', expectedTitle?: string): Promise<TMDBEpisode> => {
     const useTvmaze = forceProvider === 'tvmaze' || (forceProvider !== 'tmdb' && runtimeTvProvider === 'tvmaze');
     if (useTvmaze) {
       try {
-        return await tvmaze.getEpisodeDetails(showId, seasonNumber, episodeNumber);
+        return await tvmaze.getEpisodeDetails(showId, seasonNumber, episodeNumber, expectedTitle);
       } catch (err) {
         console.warn(`TVmaze getEpisodeDetails failed for ${showId} S${seasonNumber}E${episodeNumber}, falling back to TMDB:`, err);
       }
@@ -208,7 +208,7 @@ export const tmdb = {
     } catch (err) {
       if (!useTvmaze) {
         try {
-          return await tvmaze.getEpisodeDetails(showId, seasonNumber, episodeNumber);
+          return await tvmaze.getEpisodeDetails(showId, seasonNumber, episodeNumber, expectedTitle);
         } catch {}
       }
       throw err;

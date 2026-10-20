@@ -31,7 +31,8 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     watchedMovies, 
     customLists,
     settings,
-    updateSettings
+    updateSettings,
+    removeFromContinueWatching
   } = useCineTrack();
 
   const [trendingMovies, setTrendingMovies] = useState<TMDBMedia[]>(() => cachedHomeData?.trendingMovies || []);
@@ -552,6 +553,11 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                 return { prog, lastActivity };
               })
               .filter(({ prog, lastActivity }) => {
+                // 0. Exclude dismissed / removed shows
+                if (prog.dismissedFromContinueWatching || settings.dismissedContinueWatching?.includes(prog.showId)) {
+                  return false;
+                }
+
                 const resolved = resolvedProgress[prog.showId];
                 const totalEps = resolved ? resolved.totalEpisodes : prog.totalEpisodesCount;
                 const watchedEps = resolved ? resolved.watchedEpisodesCount : prog.watchedEpisodesCount;
@@ -598,7 +604,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                       <div 
                         key={prog.showId}
                         onClick={() => onNavigate({ type: 'show-details', showId: prog.showId })}
-                        className="bg-card hover:bg-slate-800/20 border border-border-custom rounded-2xl p-3 flex gap-3.5 cursor-pointer hover:scale-[1.01] transition shadow-sm group"
+                        className="bg-card hover:bg-slate-800/20 border border-border-custom rounded-2xl p-3 flex gap-3.5 cursor-pointer hover:scale-[1.01] transition shadow-sm group relative"
                       >
                         <img 
                           src={getPosterUrl(prog.posterPath, 'w185')} 
@@ -606,7 +612,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                           className="w-16 h-24 object-cover rounded-xl shrink-0 shadow-md bg-slate-900"
                           referrerPolicy="no-referrer"
                         />
-                        <div className="flex-1 flex flex-col justify-between min-w-0">
+                        <div className="flex-1 flex flex-col justify-between min-w-0 pr-6">
                           <div>
                             <h3 className="font-bold text-sm text-foreground truncate group-hover:text-primary-custom transition">
                               {prog.title}
@@ -628,6 +634,20 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                             </div>
                           </div>
                         </div>
+
+                        {/* Remove from Continue Watching Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromContinueWatching(prog.showId);
+                          }}
+                          title="Remove from Continue Watching"
+                          aria-label={`Remove ${prog.title} from continue watching`}
+                          className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-card/90 hover:bg-red-500/20 text-muted-custom hover:text-red-400 border border-border-custom/60 hover:border-red-500/30 flex items-center justify-center transition opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 cursor-pointer shadow-sm"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     );
                   })}

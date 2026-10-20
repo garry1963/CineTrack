@@ -78,6 +78,9 @@ interface CineTrackContextType {
   deleteCustomList: (listId: string) => Promise<void>;
   reorderCustomLists: (newOrderedLists: CustomList[]) => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
+  removeFromContinueWatching: (showId: number) => Promise<void>;
+  restoreToContinueWatching: (showId: number) => Promise<void>;
+  clearDismissedContinueWatching: () => Promise<void>;
   
   isMovieWatched: (movieId: number) => boolean;
   getMovieStatus: (movieId: number) => 'Watched' | 'Unwatched' | 'Rewatch' | 'Wishlist';
@@ -979,6 +982,120 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const removeFromContinueWatching = async (showId: number) => {
+    const targetShow = showProgress.find(p => p.showId === showId);
+    const updatedProgress = showProgress.map(p => 
+      p.showId === showId ? { ...p, dismissedFromContinueWatching: true } : p
+    );
+    setShowProgress(updatedProgress);
+
+    const currentDismissed = settings.dismissedContinueWatching || [];
+    const updatedDismissed = currentDismissed.includes(showId) 
+      ? currentDismissed 
+      : [...currentDismissed, showId];
+    
+    const updatedSettings: AppSettings = {
+      ...settings,
+      dismissedContinueWatching: updatedDismissed
+    };
+    setSettings(updatedSettings);
+
+    if (user && !isViewingShared) {
+      localStorage.setItem(`cinetrack_cache_${user.uid}_showProgress`, JSON.stringify(updatedProgress));
+      localStorage.setItem(`cinetrack_cache_${user.uid}_settings`, JSON.stringify(updatedSettings));
+      try {
+        const batch = writeBatch(db);
+        if (targetShow) {
+          batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), {
+            ...targetShow,
+            dismissedFromContinueWatching: true
+          });
+        }
+        batch.set(doc(db, 'users', user.uid, 'settings', 'preferences'), updatedSettings);
+        await batch.commit();
+      } catch (err) {
+        console.error('Firestore removeFromContinueWatching error:', err);
+      }
+    }
+
+    showNotification(
+      `${targetShow?.title || 'Show'} removed from Continue Watching.`,
+      'info',
+      'Continue Watching'
+    );
+  };
+
+  const restoreToContinueWatching = async (showId: number) => {
+    const targetShow = showProgress.find(p => p.showId === showId);
+    const updatedProgress = showProgress.map(p => 
+      p.showId === showId ? { ...p, dismissedFromContinueWatching: false } : p
+    );
+    setShowProgress(updatedProgress);
+
+    const currentDismissed = settings.dismissedContinueWatching || [];
+    const updatedDismissed = currentDismissed.filter(id => id !== showId);
+
+    const updatedSettings: AppSettings = {
+      ...settings,
+      dismissedContinueWatching: updatedDismissed
+    };
+    setSettings(updatedSettings);
+
+    if (user && !isViewingShared) {
+      localStorage.setItem(`cinetrack_cache_${user.uid}_showProgress`, JSON.stringify(updatedProgress));
+      localStorage.setItem(`cinetrack_cache_${user.uid}_settings`, JSON.stringify(updatedSettings));
+      try {
+        const batch = writeBatch(db);
+        if (targetShow) {
+          batch.set(doc(db, 'users', user.uid, 'show_progress', `${showId}`), {
+            ...targetShow,
+            dismissedFromContinueWatching: false
+          });
+        }
+        batch.set(doc(db, 'users', user.uid, 'settings', 'preferences'), updatedSettings);
+        await batch.commit();
+      } catch (err) {
+        console.error('Firestore restoreToContinueWatching error:', err);
+      }
+    }
+
+    showNotification(
+      `${targetShow?.title || 'Show'} restored to Continue Watching.`,
+      'success',
+      'Continue Watching'
+    );
+  };
+
+  const clearDismissedContinueWatching = async () => {
+    const updatedProgress = showProgress.map(p => ({
+      ...p,
+      dismissedFromContinueWatching: false
+    }));
+    setShowProgress(updatedProgress);
+
+    const updatedSettings: AppSettings = {
+      ...settings,
+      dismissedContinueWatching: []
+    };
+    setSettings(updatedSettings);
+
+    if (user && !isViewingShared) {
+      localStorage.setItem(`cinetrack_cache_${user.uid}_showProgress`, JSON.stringify(updatedProgress));
+      localStorage.setItem(`cinetrack_cache_${user.uid}_settings`, JSON.stringify(updatedSettings));
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'settings', 'preferences'), updatedSettings);
+      } catch (err) {
+        console.error('Firestore clearDismissed error:', err);
+      }
+    }
+
+    showNotification(
+      'All dismissed shows restored to Continue Watching.',
+      'success',
+      'Continue Watching'
+    );
+  };
+
   const loginAsGuest = async () => {
     throw new Error('Guest sign-in is disabled. Please register or sign in with your email and password.');
   };
@@ -1290,6 +1407,9 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       deleteCustomList,
       reorderCustomLists,
       updateSettings,
+      removeFromContinueWatching,
+      restoreToContinueWatching,
+      clearDismissedContinueWatching,
       
       isMovieWatched,
       getMovieStatus,

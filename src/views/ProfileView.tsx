@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useCineTrack } from '../context/CineTrackContext';
 import { auth, signOut, db, doc, setDoc } from '../firebase';
 import { AppSettings, ThemeMode, ViewState } from '../types';
-import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2, ListOrdered, ArrowUpDown, Tv, Globe, Server, Activity, ExternalLink } from 'lucide-react';
+import { User, Settings, Database, Sliders, LogOut, Sun, Moon, Shield, Download, Upload, Check, RefreshCw, Share2, Lock, Trash2, ListOrdered, ArrowUpDown, Tv, Globe, Server, Activity, ExternalLink, RotateCcw, Eye } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { transformPassword } from '../lib/utils';
 import { tvmaze } from '../services/tvmaze';
@@ -28,7 +28,9 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
     loadSharedAccountByEmail,
     loadSharedAccountByUid,
     stopViewingSharedAccount,
-    mergeSharedAccountData
+    mergeSharedAccountData,
+    restoreToContinueWatching,
+    clearDismissedContinueWatching
   } = useCineTrack();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -557,6 +559,53 @@ export default function ProfileView({ onNavigate }: { onNavigate?: (view: ViewSt
                 <p className="text-[10px] text-muted-custom">
                   Determines the initial sorting view when opening any user-created list.
                 </p>
+              </div>
+            )}
+
+            {/* Continue Watching List Preferences */}
+            {settings.dismissedContinueWatching && settings.dismissedContinueWatching.length > 0 && (
+              <div className="space-y-2 pt-2 bg-background/50 border border-border-custom/60 rounded-xl p-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-primary-custom" />
+                      <span>Hidden from Continue Watching</span>
+                    </label>
+                    <p className="text-[10px] text-muted-custom">
+                      {settings.dismissedContinueWatching.length} TV {settings.dismissedContinueWatching.length === 1 ? 'show was' : 'shows were'} removed from your active Continue Watching feed.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => clearDismissedContinueWatching()}
+                    className="px-2.5 py-1 text-[11px] font-bold text-primary-custom hover:bg-primary-custom/10 border border-primary-custom/20 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Restore All</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {settings.dismissedContinueWatching.map((id) => {
+                    const show = showProgress.find(p => p.showId === id);
+                    return (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 bg-slate-800/40 border border-border-custom/50 rounded-md text-foreground"
+                      >
+                        <span className="truncate max-w-[120px]">{show?.title || `Show #${id}`}</span>
+                        <button
+                          type="button"
+                          onClick={() => restoreToContinueWatching(id)}
+                          title="Restore to Continue Watching"
+                          className="hover:text-primary-custom cursor-pointer"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

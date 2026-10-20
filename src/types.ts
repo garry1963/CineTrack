@@ -29,6 +29,7 @@ export interface AppSettings {
   bottomNavItems?: string[];
   enableCustomListSorting?: boolean;
   defaultCustomListSort?: 'custom' | 'added' | 'alpha' | 'runtime' | 'release';
+  dismissedContinueWatching?: number[];
 }
 
 // TMDB Standard Structures
@@ -188,6 +189,7 @@ export interface TVShowProgress {
   lastWatchedEpisode: number;
   watchedEpisodesCount: number;
   totalEpisodesCount: number;
+  dismissedFromContinueWatching?: boolean;
   updatedAt: number;
 }
 
