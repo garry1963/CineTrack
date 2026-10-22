@@ -295,11 +295,19 @@ export default function DetailsView({ currentView, onNavigate, onBack }: Details
           setUserRating(getItemRating(currentView.showId, 'tv'));
           setUserNote(getItemNote(currentView.showId, 'tv'));
         } else if (currentView.type === 'season-details') {
-          const data = await tmdb.getSeasonDetails(currentView.showId, currentView.seasonNumber);
-          setSeason(data);
+          const [seasonData, showData] = await Promise.all([
+            tmdb.getSeasonDetails(currentView.showId, currentView.seasonNumber),
+            tmdb.getShowDetails(currentView.showId, undefined, currentView.showName).catch(() => null)
+          ]);
+          setSeason(seasonData);
+          if (showData) setMedia(showData);
         } else if (currentView.type === 'episode-details') {
-          const data = await tmdb.getEpisodeDetails(currentView.showId, currentView.seasonNumber, currentView.episodeNumber);
-          setEpisode(data);
+          const [epData, showData] = await Promise.all([
+            tmdb.getEpisodeDetails(currentView.showId, currentView.seasonNumber, currentView.episodeNumber),
+            tmdb.getShowDetails(currentView.showId, undefined, currentView.showName).catch(() => null)
+          ]);
+          setEpisode(epData);
+          if (showData) setMedia(showData);
           setUserRating(getItemRating(`${currentView.showId}_${currentView.seasonNumber}_${currentView.episodeNumber}`, 'episode'));
           setUserNote(getItemNote(`${currentView.showId}_${currentView.seasonNumber}_${currentView.episodeNumber}`, 'episode'));
         }
@@ -985,7 +993,7 @@ export default function DetailsView({ currentView, onNavigate, onBack }: Details
                   currentView.showId,
                   season.season_number,
                   currentView.showName,
-                  media?.poster_path || null,
+                  media?.poster_path || season.poster_path || null,
                   season.episodes || [],
                   !allWatched
                 );
@@ -1065,7 +1073,7 @@ export default function DetailsView({ currentView, onNavigate, onBack }: Details
                               season.season_number, 
                               ep.episode_number, 
                               currentView.showName, 
-                              null, 
+                              media?.poster_path || season.poster_path || null, 
                               totalEps
                             );
                           }}
@@ -1146,8 +1154,8 @@ export default function DetailsView({ currentView, onNavigate, onBack }: Details
                     currentView.seasonNumber, 
                     currentView.episodeNumber, 
                     currentView.showName, 
-                    null, 
-                    10 // standard guess fallback
+                    media?.poster_path || episode?.still_path || null, 
+                    media?.number_of_episodes || 10
                   );
                 }}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer ${

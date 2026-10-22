@@ -15,25 +15,35 @@ export function stripHtml(html?: string | null): string {
     .trim();
 }
 
-export function getPosterUrl(path: string | null, size: string = 'w500'): string {
-  if (!path) {
+export function getPosterUrl(path: string | null | undefined, size: string = 'w500'): string {
+  if (!path || typeof path !== 'string' || !path.trim()) {
     // Return a beautiful elegant placeholder SVG data URI or simple gradient
     return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="%231e293b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="20" fill="%2364748b">No Poster Available</text></svg>`;
   }
-  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
-    return path;
+  const cleanPath = path.trim();
+  if (cleanPath.startsWith('http://')) {
+    return cleanPath.replace(/^http:\/\//i, 'https://');
   }
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+  if (cleanPath.startsWith('https://') || cleanPath.startsWith('data:')) {
+    return cleanPath;
+  }
+  const normalizedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+  return `https://image.tmdb.org/t/p/${size}${normalizedPath}`;
 }
 
-export function getBackdropUrl(path: string | null, size: string = 'w1280'): string {
-  if (!path) {
+export function getBackdropUrl(path: string | null | undefined, size: string = 'w1280'): string {
+  if (!path || typeof path !== 'string' || !path.trim()) {
     return '';
   }
-  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
-    return path;
+  const cleanPath = path.trim();
+  if (cleanPath.startsWith('http://')) {
+    return cleanPath.replace(/^http:\/\//i, 'https://');
   }
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+  if (cleanPath.startsWith('https://') || cleanPath.startsWith('data:')) {
+    return cleanPath;
+  }
+  const normalizedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+  return `https://image.tmdb.org/t/p/${size}${normalizedPath}`;
 }
 
 export function formatDate(dateStr: string | null | undefined): string {

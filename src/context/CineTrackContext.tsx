@@ -155,16 +155,18 @@ const defaultSettings: AppSettings = {
   defaultCustomListSort: 'custom'
 };
 
-async function getShowWatchStats(showId: number, updatedWatchedEpisodes: WatchedEpisode[]) {
+async function getShowWatchStats(showId: number, updatedWatchedEpisodes: WatchedEpisode[], showTitle?: string) {
   let totalEpisodesCount = 0;
   let nextSeason = 1;
   let nextEpisode = 1;
   let seasonsList: { season_number: number; episode_count: number }[] = [];
+  let resolvedPosterPath: string | null = null;
 
   try {
-    const showDetails = await tmdb.getShowDetails(showId);
+    const showDetails = await tmdb.getShowDetails(showId, undefined, showTitle);
     if (showDetails) {
       totalEpisodesCount = showDetails.number_of_episodes || 0;
+      resolvedPosterPath = showDetails.poster_path || null;
       seasonsList = (showDetails.seasons || [])
         .filter((s: any) => s.season_number > 0)
         .map((s: any) => ({
@@ -185,7 +187,8 @@ async function getShowWatchStats(showId: number, updatedWatchedEpisodes: Watched
     return {
       totalEpisodesCount,
       nextSeason: maxSeason,
-      nextEpisode: maxEp + 1
+      nextEpisode: maxEp + 1,
+      resolvedPosterPath
     };
   }
 
@@ -220,7 +223,8 @@ async function getShowWatchStats(showId: number, updatedWatchedEpisodes: Watched
   return {
     totalEpisodesCount,
     nextSeason,
-    nextEpisode
+    nextEpisode,
+    resolvedPosterPath
   };
 }
 
@@ -664,18 +668,22 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(nextWatchedEpisodes));
 
     // 2. Fetch/calculate actual total episodes count and the next unmarked episode
-    const { totalEpisodesCount, nextSeason, nextEpisode } = await getShowWatchStats(showId, nextWatchedEpisodes);
+    const { totalEpisodesCount, nextSeason, nextEpisode, resolvedPosterPath } = await getShowWatchStats(showId, nextWatchedEpisodes, showTitle);
     const updatedCount = nextWatchedEpisodes.filter(we => we.showId === showId).length;
+
+    const existingProgress = showProgress.find(p => p.showId === showId);
+    const finalPoster = posterPath || existingProgress?.posterPath || resolvedPosterPath || watchlist.find(w => w.tmdbId === showId)?.posterPath || null;
 
     const progress: TVShowProgress = {
       showId,
       title: showTitle,
-      posterPath,
+      posterPath: finalPoster,
       status: updatedCount >= totalEpisodesCount ? 'Completed' : 'Current',
       lastWatchedSeason: nextSeason,
       lastWatchedEpisode: nextEpisode,
       watchedEpisodesCount: updatedCount,
       totalEpisodesCount: totalEpisodesCount,
+      dismissedFromContinueWatching: false,
       updatedAt: Date.now()
     };
 
@@ -740,18 +748,22 @@ export function CineTrackProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(`cinetrack_cache_${user.uid}_watchedEpisodes`, JSON.stringify(nextWatchedEpisodes));
 
       // Calculate actual total episodes count and the next unmarked episode
-      const { totalEpisodesCount, nextSeason, nextEpisode } = await getShowWatchStats(showId, nextWatchedEpisodes);
+      const { totalEpisodesCount, nextSeason, nextEpisode, resolvedPosterPath } = await getShowWatchStats(showId, nextWatchedEpisodes, showTitle);
       const showEpsCount = nextWatchedEpisodes.filter(we => we.showId === showId).length;
       
+      const existingProgress = showProgress.find(p => p.showId === showId);
+      const finalPoster = posterPath || existingProgress?.posterPath || resolvedPosterPath || watchlist.find(w => w.tmdbId === showId)?.posterPath || null;
+
       const progress: TVShowProgress = {
         showId,
         title: showTitle,
-        posterPath,
+        posterPath: finalPoster,
         status: showEpsCount >= totalEpisodesCount ? 'Completed' : 'Current',
         lastWatchedSeason: nextSeason,
         lastWatchedEpisode: nextEpisode,
         watchedEpisodesCount: showEpsCount,
         totalEpisodesCount: totalEpisodesCount,
+        dismissedFromContinueWatching: false,
         updatedAt: Date.now()
       };
 

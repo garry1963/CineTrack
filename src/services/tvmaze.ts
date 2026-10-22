@@ -138,9 +138,11 @@ export function mapTVmazeShowToTMDB(show: any): TMDBMedia {
     name
   }));
 
-  const posterPath = show.image?.original || show.image?.medium || null;
-  // TVmaze original images are high resolution and suitable for posters & hero backdrops
-  const backdropPath = show.image?.original || show.image?.medium || null;
+  const firstSeasonImage = (show._embedded?.seasons || []).find((s: any) => s.image?.original || s.image?.medium)?.image;
+  const rawPoster = show.image?.original || show.image?.medium || firstSeasonImage?.original || firstSeasonImage?.medium || null;
+  const posterPath = rawPoster ? String(rawPoster).replace(/^http:\/\//i, 'https://') : null;
+  const rawBackdrop = show.image?.original || show.image?.medium || null;
+  const backdropPath = rawBackdrop ? String(rawBackdrop).replace(/^http:\/\//i, 'https://') : null;
 
   return {
     id: show.id,

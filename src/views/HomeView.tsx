@@ -48,6 +48,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     nextSeason: number;
     nextEpisode: number;
     watchedEpisodesCount: number;
+    posterPath?: string | null;
   }>>({});
   const fetchedOrFetchingRef = useRef<Set<number>>(new Set());
 
@@ -60,7 +61,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
       await Promise.all(
         showProgress.map(async (prog) => {
           try {
-            const details = await tmdb.getShowDetails(prog.showId);
+            const details = await tmdb.getShowDetails(prog.showId, undefined, prog.title);
             if (!details) return;
 
             const totalCount = details.number_of_episodes || 0;
@@ -101,7 +102,8 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
               totalEpisodes: totalCount,
               nextSeason: nextS,
               nextEpisode: nextE,
-              watchedEpisodesCount: watchedCount
+              watchedEpisodesCount: watchedCount,
+              posterPath: details.poster_path || null
             };
           } catch (e) {
             console.error(`Failed to resolve details for show ${prog.showId}:`, e);
@@ -118,7 +120,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
     return () => {
       isMounted = false;
     };
-  }, [showProgress, watchedEpisodes]);
+  }, [showProgress, watchedEpisodes, settings.tvMetadataProvider]);
 
   useEffect(() => {
     const moviesNeedingRuntime: { id: number }[] = [];
@@ -599,6 +601,9 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                     
                     const displaySeason = resolved ? resolved.nextSeason : prog.lastWatchedSeason;
                     const displayEpisode = resolved ? resolved.nextEpisode : prog.lastWatchedEpisode;
+                    const showPoster = (settings.tvMetadataProvider === 'tvmaze' && resolved?.posterPath)
+                      ? resolved.posterPath
+                      : (resolved?.posterPath || prog.posterPath || watchlist.find(w => w.tmdbId === prog.showId)?.posterPath || null);
 
                     return (
                       <div 
@@ -607,10 +612,16 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
                         className="bg-card hover:bg-slate-800/20 border border-border-custom rounded-2xl p-3 flex gap-3.5 cursor-pointer hover:scale-[1.01] transition shadow-sm group relative"
                       >
                         <img 
-                          src={getPosterUrl(prog.posterPath, 'w185')} 
+                          src={getPosterUrl(showPoster, 'w185')} 
                           alt={prog.title}
                           className="w-16 h-24 object-cover rounded-xl shrink-0 shadow-md bg-slate-900"
                           referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (prog.posterPath && target.src !== getPosterUrl(prog.posterPath, 'w185')) {
+                              target.src = getPosterUrl(prog.posterPath, 'w185');
+                            }
+                          }}
                         />
                         <div className="flex-1 flex flex-col justify-between min-w-0 pr-6">
                           <div>
